@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tracey’s Leaving Card</title>
+  <meta name="description" content="An interactive digital leaving card for Tracey. Add a handwritten-style note or record a voice message." />
+
+  <!-- Handwriting fonts (six selectable) + display fonts for the cover -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Caveat:wght@400;600&family=Dancing+Script:wght@400;600&family=Great+Vibes&family=Patrick+Hand&family=Indie+Flower&family=Homemade+Apple&family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap"
+    rel="stylesheet"
+  />
+
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <!-- ============================================================
+       Header: title + primary actions
+       ============================================================ -->
+  <header class="app-header">
+    <div class="app-header__title">
+      <span class="app-header__eyebrow">A digital leaving card</span>
+      <h1 class="app-header__name">For Tracey</h1>
+    </div>
+    <div class="app-header__actions">
+      <button type="button" class="btn btn--primary" id="btn-add-message">
+        <span aria-hidden="true">✎</span> Add your message
+      </button>
+      <button type="button" class="btn btn--secondary" id="btn-add-voice">
+        <span aria-hidden="true">🎙</span> Record a voice message
+      </button>
+    </div>
+  </header>
+
+  <!-- Brief on-screen instructions -->
+  <p class="instructions" id="instructions">
+    Turn the pages with the arrows, your keyboard’s arrow keys, or by swiping.
+    Use <strong>Add your message</strong> to write a note in your own handwriting style,
+    or <strong>Record a voice message</strong> to leave Tracey a spoken farewell.
+  </p>
+
+  <!-- ============================================================
+       The card (book)
+       ============================================================ -->
+  <main class="stage" id="stage">
+    <button type="button" class="nav-btn nav-btn--prev" id="btn-prev" aria-label="Previous page">
+      <span aria-hidden="true">‹</span>
+    </button>
+
+    <section class="book-wrap" aria-label="Tracey’s leaving card">
+      <div class="book" id="book" aria-live="polite">
+        <!-- Pages are rendered here by js/app.js -->
+      </div>
+      <!-- Click/tap zones on the page edges -->
+      <button type="button" class="edge-zone edge-zone--prev" id="edge-prev" aria-label="Previous page" tabindex="-1"></button>
+      <button type="button" class="edge-zone edge-zone--next" id="edge-next" aria-label="Next page" tabindex="-1"></button>
+    </section>
+
+    <button type="button" class="nav-btn nav-btn--next" id="btn-next" aria-label="Next page">
+      <span aria-hidden="true">›</span>
+    </button>
+  </main>
+
+  <div class="page-indicator" id="page-indicator" aria-live="polite">Page 1 of 3</div>
+
+  <footer class="app-footer">
+    <span>Made with love by Tracey’s colleagues.</span>
+    <button type="button" class="link-btn link-btn--muted" id="btn-admin">Admin</button>
+  </footer>
+
+  <!-- Offscreen container used to measure notes before laying them out -->
+  <div class="measure-root" id="measure-root" aria-hidden="true"></div>
+
+  <!-- ============================================================
+       Dialog: add a written message
+       ============================================================ -->
+  <dialog class="dialog" id="dialog-message" aria-labelledby="dialog-message-title">
+    <form method="dialog" class="dialog__form" id="form-message" novalidate>
+      <header class="dialog__header">
+        <h2 class="dialog__title" id="dialog-message-title">Add your message</h2>
+        <ol class="stepper" id="message-stepper" aria-label="Progress">
+          <li class="stepper__step is-active" data-step="1">Your name</li>
+          <li class="stepper__step" data-step="2">Message</li>
+          <li class="stepper__step" data-step="3">Review</li>
+        </ol>
+        <button type="button" class="dialog__close" data-close aria-label="Close">×</button>
+      </header>
+
+      <!-- Step 1: name + source -->
+      <section class="step is-active" data-step="1">
+        <div class="field">
+          <label for="msg-name">Your name <span class="req" aria-hidden="true">*</span></label>
+          <input type="text" id="msg-name" name="name" maxlength="40" autocomplete="name" required placeholder="e.g. Sam from Accounts" />
+          <p class="field__error" id="msg-name-error" role="alert"></p>
+        </div>
+
+        <fieldset class="field">
+          <legend>How would you like to start?</legend>
+          <div class="choice-grid">
+            <label class="choice-card">
+              <input type="radio" name="source" value="own" checked />
+              <span class="choice-card__body">
+                <span class="choice-card__title">Write my own</span>
+                <span class="choice-card__desc">Start with a blank note.</span>
+              </span>
+            </label>
+            <label class="choice-card">
+              <input type="radio" name="source" value="library" />
+              <span class="choice-card__body">
+                <span class="choice-card__title">Start from a suggestion</span>
+                <span class="choice-card__desc">Pick a message from the library and personalise it.</span>
+              </span>
+            </label>
+          </div>
+        </fieldset>
+
+        <!-- Library panel (shown when "library" is selected) -->
+        <div class="library" id="library" hidden>
+          <div class="library__controls">
+            <div class="tabs" role="tablist" aria-label="Message categories" id="library-tabs">
+              <button type="button" role="tab" class="tab is-active" data-category="goodluck" aria-selected="true">Good Luck</button>
+              <button type="button" role="tab" class="tab" data-category="farewell" aria-selected="false">Farewell &amp; Good Luck</button>
+              <button type="button" role="tab" class="tab" data-category="funny" aria-selected="false">Funny Congratulations</button>
+            </div>
+            <label class="visually-hidden" for="library-search">Search messages</label>
+            <input type="search" id="library-search" placeholder="Search messages…" />
+          </div>
+          <ul class="library__list" id="library-list" role="listbox" aria-label="Suggested messages"></ul>
+          <p class="field__error" id="library-error" role="alert"></p>
+        </div>
+
+        <footer class="dialog__actions">
+          <button type="button" class="btn btn--ghost" data-close>Cancel</button>
+          <button type="button" class="btn btn--primary" id="msg-to-step-2">Continue</button>
+        </footer>
+      </section>
+
+      <!-- Step 2: font + compose -->
+      <section class="step" data-step="2">
+        <fieldset class="field">
+          <legend>Choose a handwriting style</legend>
+          <div class="font-grid" id="font-grid"></div>
+        </fieldset>
+
+        <div class="field">
+          <label for="msg-text">Your message <span class="req" aria-hidden="true">*</span></label>
+          <textarea id="msg-text" name="text" rows="5" maxlength="400" required placeholder="Write something lovely for Tracey…"></textarea>
+          <div class="field__meta">
+            <p class="field__error" id="msg-text-error" role="alert"></p>
+            <span class="char-count" id="msg-char-count">0 / 400</span>
+          </div>
+        </div>
+
+        <div class="field">
+          <span class="field__label">Live preview</span>
+          <div class="preview-surface">
+            <div class="note note--preview" id="msg-live-preview"></div>
+          </div>
+        </div>
+
+        <footer class="dialog__actions">
+          <button type="button" class="btn btn--ghost" id="msg-back-to-1">Back</button>
+          <button type="button" class="btn btn--primary" id="msg-to-step-3">Review message</button>
+        </footer>
+      </section>
+
+      <!-- Step 3: review -->
+      <section class="step" data-step="3">
+        <p class="dialog__hint">This is how your note will appear on Tracey’s card. You can still go back and make changes.</p>
+        <div class="preview-surface preview-surface--tall">
+          <div class="note note--preview" id="msg-review-preview"></div>
+        </div>
+        <footer class="dialog__actions">
+          <button type="button" class="btn btn--ghost" id="msg-back-to-2">Edit</button>
+          <button type="submit" class="btn btn--primary" id="msg-submit">Add to card</button>
+        </footer>
+      </section>
+    </form>
+  </dialog>
+
+  <!-- ============================================================
+       Dialog: record a voice message
+       ============================================================ -->
+  <dialog class="dialog" id="dialog-voice" aria-labelledby="dialog-voice-title">
+    <form method="dialog" class="dialog__form" id="form-voice" novalidate>
+      <header class="dialog__header">
+        <h2 class="dialog__title" id="dialog-voice-title">Record a voice message</h2>
+        <button type="button" class="dialog__close" data-close aria-label="Close">×</button>
+      </header>
+
+      <div class="field">
+        <label for="voice-name">Your name <span class="req" aria-hidden="true">*</span></label>
+        <input type="text" id="voice-name" name="name" maxlength="40" autocomplete="name" required placeholder="e.g. Priya" />
+        <p class="field__error" id="voice-name-error" role="alert"></p>
+      </div>
+
+      <div class="recorder" id="recorder">
+        <div class="recorder__status">
+          <span class="recorder__dot" id="recorder-dot" aria-hidden="true"></span>
+          <span id="recorder-status">Ready to record</span>
+          <span class="recorder__timer" id="recorder-timer">00:00</span>
+        </div>
+        <div class="recorder__bars" id="recorder-bars" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="recorder__controls">
+          <button type="button" class="btn btn--record" id="rec-start">● Record</button>
+          <button type="button" class="btn btn--secondary" id="rec-stop" disabled>■ Stop</button>
+          <button type="button" class="btn btn--secondary" id="rec-play" disabled>▶ Play</button>
+          <button type="button" class="btn btn--ghost" id="rec-delete" disabled>Delete &amp; re-record</button>
+        </div>
+        <audio id="rec-audio" preload="auto" hidden></audio>
+        <p class="field__error" id="voice-error" role="alert"></p>
+        <p class="recorder__unsupported" id="voice-unsupported" hidden>
+          Sorry, your browser doesn’t support audio recording. Please try a recent version of Chrome, Edge, Firefox or Safari,
+          or add a written message instead.
+        </p>
+      </div>
+
+      <footer class="dialog__actions">
+        <button type="button" class="btn btn--ghost" data-close>Cancel</button>
+        <button type="submit" class="btn btn--primary" id="voice-submit" disabled>Add to card</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- ============================================================
+       Dialog: admin / reset
+       ============================================================ -->
+  <dialog class="dialog dialog--small" id="dialog-admin" aria-labelledby="dialog-admin-title">
+    <form method="dialog" class="dialog__form" id="form-admin" novalidate>
+      <header class="dialog__header">
+        <h2 class="dialog__title" id="dialog-admin-title">Admin: reset card</h2>
+        <button type="button" class="dialog__close" data-close aria-label="Close">×</button>
+      </header>
+      <p class="dialog__hint">
+        This permanently removes <strong>all</strong> written and voice messages stored on this device.
+        Type <strong>RESET</strong> below to confirm.
+      </p>
+      <div class="field">
+        <label for="admin-confirm">Confirmation</label>
+        <input type="text" id="admin-confirm" autocomplete="off" placeholder="RESET" />
+      </div>
+      <footer class="dialog__actions">
+        <button type="button" class="btn btn--ghost" data-close>Cancel</button>
+        <button type="submit" class="btn btn--danger" id="admin-reset" disabled>Reset card</button>
+      </footer>
+    </form>
+  </dialog>
+
+  <!-- Toast notifications -->
+  <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
+
+  <!-- Scripts (classic scripts so the card works from file:// too; order matters) -->
+  <script defer src="js/fonts.js"></script>
+  <script defer src="js/messages-library.js"></script>
+  <script defer src="js/storage.js"></script>
+  <script defer src="js/layout.js"></script>
+  <script defer src="js/book.js"></script>
+  <script defer src="js/app.js"></script>
+</body>
+</html>

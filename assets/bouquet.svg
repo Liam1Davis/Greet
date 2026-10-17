@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="85 30 230 365" width="230" height="365" role="img" aria-label="A bouquet of flowers">
+  <defs>
+    <radialGradient id="rose" cx="40%" cy="35%" r="70%">
+      <stop offset="0" stop-color="#f6d3cd"/>
+      <stop offset="1" stop-color="#d9a7a0"/>
+    </radialGradient>
+    <radialGradient id="roseDeep" cx="40%" cy="35%" r="70%">
+      <stop offset="0" stop-color="#e8b4ad"/>
+      <stop offset="1" stop-color="#c48b84"/>
+    </radialGradient>
+    <radialGradient id="cream" cx="40%" cy="35%" r="70%">
+      <stop offset="0" stop-color="#fff9ec"/>
+      <stop offset="1" stop-color="#efdfb6"/>
+    </radialGradient>
+    <radialGradient id="blue" cx="40%" cy="35%" r="70%">
+      <stop offset="0" stop-color="#e2eef2"/>
+      <stop offset="1" stop-color="#9fb9c7"/>
+    </radialGradient>
+    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#b3c9b7"/>
+      <stop offset="1" stop-color="#7e9b84"/>
+    </linearGradient>
+    <linearGradient id="ribbon" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#e2cc93"/>
+      <stop offset="0.5" stop-color="#c9a961"/>
+      <stop offset="1" stop-color="#a98a44"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fbf7ee"/>
+      <stop offset="1" stop-color="#eadfca"/>
+    </linearGradient>
+  </defs>
+
+  <!-- wrapping paper (behind) -->
+  <path d="M110 180 L200 390 L290 180 L255 150 L200 165 L145 150 Z" fill="url(#paper)" stroke="#d7c7a4" stroke-width="1.5"/>
+
+  <!-- stems -->
+  <g stroke="#7e9b84" stroke-width="3" stroke-linecap="round" fill="none">
+    <path d="M200 330 C 190 280, 160 230, 130 190"/>
+    <path d="M200 330 C 205 280, 215 230, 250 185"/>
+    <path d="M200 330 C 198 280, 190 230, 200 180"/>
+    <path d="M200 330 C 192 290, 165 260, 150 225"/>
+    <path d="M200 330 C 210 290, 240 260, 265 230"/>
+  </g>
+
+  <!-- leaves -->
+  <g fill="url(#leaf)" stroke="#6f8c75" stroke-width="1">
+    <path d="M120 210 q 20 -30, 50 -10 q -25 20, -50 10z"/>
+    <path d="M285 215 q -22 -30, -50 -8 q 25 18, 50 8z"/>
+    <path d="M160 250 q 10 -34, 42 -30 q -14 28, -42 30z"/>
+    <path d="M245 255 q -8 -34, -40 -32 q 12 28, 40 32z"/>
+    <path d="M110 160 q 24 -22, 48 2 q -26 14, -48 -2z"/>
+    <path d="M290 165 q -24 -24, -48 0 q 26 14, 48 0z"/>
+    <path d="M190 120 q 10 -34, 36 -36 q -8 30, -36 36z"/>
+    <path d="M300 120 q -40 10, -42 46 q 34 -8, 42 -46z"/>
+    <path d="M100 125 q 40 10, 42 46 q -34 -8, -42 -46z"/>
+  </g>
+
+  <!-- small blue filler flowers -->
+  <g fill="url(#blue)" stroke="#8aa5b3" stroke-width="0.8">
+    <g transform="translate(118 150)"><circle r="7"/><circle cx="12" cy="-6" r="6"/><circle cx="-4" cy="-12" r="5.5"/><circle cx="10" cy="8" r="5"/></g>
+    <g transform="translate(282 150)"><circle r="7"/><circle cx="-12" cy="-6" r="6"/><circle cx="4" cy="-12" r="5.5"/><circle cx="-10" cy="8" r="5"/></g>
+    <g transform="translate(255 100)"><circle r="6"/><circle cx="9" cy="-7" r="5"/><circle cx="-8" cy="-6" r="5"/></g>
+    <g transform="translate(150 95)"><circle r="6"/><circle cx="-9" cy="-7" r="5"/><circle cx="8" cy="-6" r="5"/></g>
+  </g>
+  <g fill="#c9a961">
+    <circle cx="118" cy="150" r="1.8"/><circle cx="282" cy="150" r="1.8"/><circle cx="255" cy="100" r="1.6"/><circle cx="150" cy="95" r="1.6"/>
+  </g>
+
+  <!-- cream daisies -->
+  <g stroke="#dcc99a" stroke-width="0.8">
+    <g transform="translate(160 185)" fill="url(#cream)">
+      <ellipse rx="7" ry="16" transform="rotate(0)"/><ellipse rx="7" ry="16" transform="rotate(45)"/>
+      <ellipse rx="7" ry="16" transform="rotate(90)"/><ellipse rx="7" ry="16" transform="rotate(135)"/>
+      <circle r="7" fill="#c9a961" stroke="none"/>
+    </g>
+    <g transform="translate(245 190)" fill="url(#cream)">
+      <ellipse rx="7" ry="16" transform="rotate(22)"/><ellipse rx="7" ry="16" transform="rotate(67)"/>
+      <ellipse rx="7" ry="16" transform="rotate(112)"/><ellipse rx="7" ry="16" transform="rotate(157)"/>
+      <circle r="7" fill="#c9a961" stroke="none"/>
+    </g>
+  </g>
+
+  <!-- roses -->
+  <g stroke="#c48b84" stroke-width="0.9" stroke-linejoin="round">
+    <!-- left rose -->
+    <g transform="translate(140 130)">
+      <circle r="34" fill="url(#rose)"/>
+      <path d="M-24 6 c 2 -24, 24 -34, 40 -22 c 14 10, 16 32, -2 42 c -16 10, -36 0, -38 -20z" fill="url(#roseDeep)"/>
+      <path d="M-10 4 c 0 -14, 14 -22, 24 -14 c 8 6, 8 20, -2 26 c -10 6, -22 0, -22 -12z" fill="url(#rose)"/>
+      <path d="M-2 2 c 0 -7, 7 -11, 12 -7 c 4 3, 4 10, -1 13 c -5 3, -11 0, -11 -6z" fill="url(#roseDeep)"/>
+    </g>
+    <!-- right rose -->
+    <g transform="translate(262 128)">
+      <circle r="34" fill="url(#rose)"/>
+      <path d="M24 6 c -2 -24, -24 -34, -40 -22 c -14 10, -16 32, 2 42 c 16 10, 36 0, 38 -20z" fill="url(#roseDeep)"/>
+      <path d="M10 4 c 0 -14, -14 -22, -24 -14 c -8 6, -8 20, 2 26 c 10 6, 22 0, 22 -12z" fill="url(#rose)"/>
+      <path d="M2 2 c 0 -7, -7 -11, -12 -7 c -4 3, -4 10, 1 13 c 5 3, 11 0, 11 -6z" fill="url(#roseDeep)"/>
+    </g>
+    <!-- centre rose (largest) -->
+    <g transform="translate(200 88)">
+      <circle r="44" fill="url(#rose)"/>
+      <path d="M-30 8 c 2 -30, 30 -44, 50 -28 c 18 14, 20 42, -2 54 c -22 12, -46 0, -48 -26z" fill="url(#roseDeep)"/>
+      <path d="M-14 6 c 0 -18, 18 -28, 30 -18 c 10 8, 10 26, -2 33 c -12 7, -28 0, -28 -15z" fill="url(#rose)"/>
+      <path d="M-4 3 c 0 -9, 9 -14, 15 -9 c 5 4, 5 13, -1 17 c -6 4, -14 0, -14 -8z" fill="url(#roseDeep)"/>
+    </g>
+    <!-- lower small rose -->
+    <g transform="translate(200 165)">
+      <circle r="24" fill="url(#rose)"/>
+      <path d="M-16 4 c 2 -16, 16 -24, 28 -16 c 10 8, 10 22, -2 30 c -12 6, -26 0, -26 -14z" fill="url(#roseDeep)"/>
+      <path d="M-4 2 c 0 -8, 8 -12, 13 -8 c 4 3, 4 11, -1 14 c -5 3, -12 0, -12 -6z" fill="url(#rose)"/>
+    </g>
+  </g>
+
+  <!-- ribbon bow -->
+  <g>
+    <path d="M200 300 c -30 -26, -70 -22, -78 2 c -4 16, 12 26, 30 18 c 18 -8, 34 -14, 48 -20z" fill="url(#ribbon)" stroke="#a98a44" stroke-width="1"/>
+    <path d="M200 300 c 30 -26, 70 -22, 78 2 c 4 16, -12 26, -30 18 c -18 -8, -34 -14, -48 -20z" fill="url(#ribbon)" stroke="#a98a44" stroke-width="1"/>
+    <path d="M200 300 c -8 30, -16 56, -34 80 l 16 2 c 14 -26, 20 -50, 24 -82z" fill="url(#ribbon)" stroke="#a98a44" stroke-width="1"/>
+    <path d="M200 300 c 8 30, 16 56, 34 80 l -16 2 c -14 -26, -20 -50, -24 -82z" fill="url(#ribbon)" stroke="#a98a44" stroke-width="1"/>
+    <circle cx="200" cy="300" r="11" fill="#c9a961" stroke="#a98a44" stroke-width="1"/>
+  </g>
+</svg>

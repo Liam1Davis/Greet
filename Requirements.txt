@@ -1,0 +1,191 @@
+Below is a ready-to-paste Cursor prompt. It specifies the full interactive leaving-card website, including the A4 book-style layout, handwriting-style comments, voice messages, predefined message library, and final floral page.
+
+***
+
+## Cursor prompt
+
+Create a responsive, single-page web application called **“Tracey’s Leaving Card”** using **HTML, CSS, and vanilla JavaScript** (or React if the project already uses React). Build it as a polished, production-ready prototype with clean component structure, accessible controls, mobile-friendly behaviour, and persistent local storage.
+
+### Overall concept
+
+Build an interactive digital A4 leaving card for a colleague named **Tracey**. The card should feel like a real handwritten greeting card: pages turn like a book, messages appear as handwritten-style notes placed naturally and slightly randomly across each page, and colleagues can add written or voice messages.
+
+Use a warm, celebratory, professional greeting-card aesthetic inspired by classic farewell cards: elegant typography, subtle decorative flourishes, soft shadows, and a calm colour palette. Do not copy any specific greeting card design; create an original design in the same general style.
+
+### Card structure
+
+- The card must use an **A4 page size** in landscape or portrait orientation, with a sensible responsive fallback for smaller screens.
+- Page 1 is the front cover.
+- Page 2 onwards contain colleagues’ messages.
+- The final page is a special farewell page.
+- The number of message pages must be dynamic and depend on how many messages have been submitted.
+- Pages must turn with a realistic **book-page-turn animation**, including a subtle 3D page curl or flip effect. Support navigation using:
+  - Previous / Next buttons
+  - Click or tap on the page edge
+  - Keyboard arrow keys
+  - Swipe gestures on touch devices
+- Show a discreet page indicator, for example “Page 3 of 8”, but keep it visually subtle.
+
+### Front cover — Page 1
+
+Create a pale duck-egg blue front cover with an elegant, personalised design.
+
+Include:
+
+- Main heading:  
+  **“Good Luck In Your New Job and We Are Going To Miss You!!!”**
+- Tracey’s name displayed prominently:  
+  **“For Tracey”**
+- A clearly marked placeholder area for a photo of Tracey. Use a circular or softly rounded rectangular photo frame with a decorative border.
+- Use a placeholder image initially, clearly labelled:  
+  **“Photo of Tracey”**
+- Add tasteful decorative elements such as subtle floral illustrations, ribbon detail, gold or soft navy accents, or delicate hand-drawn flourishes.
+- Use fonts and presentation similar in feel to traditional premium farewell greeting cards: an elegant serif or script display font for the headline, with refined supporting typography.
+- The cover must look special and personalised, not like a generic web page.
+
+### Message pages — Page 2 onwards
+
+Each message page should look like a handwritten greeting-card page on the same pale duck-egg blue background.
+
+Messages must:
+
+- Appear as **images or styled handwritten text**, not as ordinary aligned typed paragraphs.
+- Use one of six selectable handwriting-style italic fonts.
+- Use a default font size of **16px**, while remaining readable on desktop and mobile.
+- Be positioned with a controlled random layout, so notes appear naturally scattered across the page like real handwritten comments on a card.
+- Avoid overlapping, clipping, or becoming unreadable.
+- Slightly rotate individual notes, for example between -4 and +4 degrees, to create a handwritten-card effect.
+- Include the contributor’s name directly below their message in a smaller but legible handwriting-style font.
+- Support pagination automatically: when a page becomes visually full, create a new page.
+
+### Adding a written message
+
+Provide a clear “Add your message” button or panel.
+
+The message creation flow must allow a user to:
+
+1. Enter their name in a required name field.
+2. Choose whether to write their own message or start from a predefined message.
+3. Select one of six handwriting-style italic fonts.
+4. Write or edit their message in a preview area.
+5. Review the completed message before submitting.
+6. Make further edits before committing.
+7. Submit the message to the card.
+
+When submitted:
+
+- Add the message to the next available space on the message pages.
+- Display the user’s entered name beneath the message.
+- Save the message locally so it remains visible after a page refresh.
+- Provide a simple confirmation, such as “Your message has been added to Tracey’s card.”
+- Prevent empty submissions and provide friendly validation messages.
+
+### Voice messages
+
+Add a “Record a voice message” option.
+
+Requirements:
+
+- Before recording, the user must enter their name.
+- Provide a clear record button, stop button, playback button, delete/re-record button, and submit button.
+- Use the browser’s MediaRecorder API where available.
+- Show recording status and elapsed time.
+- Allow the user to listen to their recording before submitting it.
+- After submission, store the audio locally, for example as a Base64 data URL in localStorage or IndexedDB.
+- Display the voice message on the card as a small, attractive handwritten-style note or audio card, with the contributor’s name underneath.
+- Include a play/pause control and, if practical, a simple waveform or animated audio icon.
+- Handle microphone permission denial gracefully with a clear message.
+- Provide a fallback message if the browser does not support audio recording.
+
+### Predefined messages
+
+Provide a message library organised into three categories. Users must be able to select a message, edit it, preview it, and then submit it as their own message.
+
+#### A — Good Luck in your New Job Wishes
+
+- Best of luck on your first day! You’ve got this, and I am confident in your abilities.
+- Wishing you smooth sailing and sunny skies as you embark on this new chapter of your career. May you find a career with endless possibilities.
+- Sending you positive vibes and good luck charms for your new job adventure. Go knock ’em dead!
+- Getting to know you these past few years has been an honour. Good luck with your new job.
+- May each day bring new opportunities and exciting challenges. Good luck with your new job, you’re going to rock it!
+- Remember, the sky’s the limit! Wishing you all the luck in the world as you soar to new heights in your career. Cheers to a new beginning!
+- You don’t need luck because you worked hard for this, but good luck all the same.
+
+#### B — Farewell and Good Luck with the New Job Messages
+
+- Sad to see you go, but excited for what lies ahead! Wishing you all the best on your new journey. My warmest congratulations to you.
+- Though we’ll miss your presence around the office, we’re thrilled to see you spread your wings and fly. Good luck with your new job!
+- Farewell, dear friend! May your new job bring fulfilment, joy, and endless growth opportunities. Congrats on the job promotion.
+- It’s been a pleasure working alongside you, and I have no doubt you’ll excel in your new role. Best of luck, and stay in touch!
+- As you bid adieu to this chapter and turn the page to a new one, know that your hard work and dedication will continue to inspire us all. Good luck, and may success follow you wherever you go.
+
+#### C — Funny Congratulations on the New Job Messages
+
+- Congrats on the new job! Now you can finally put all those years of job interview practice to good use.
+- Who needs luck when you’ve got charm, wit, and a killer resume like yours? Congratulations on the new job!
+- Just remember, the only thing more terrifying than a job interview is a first date. But hey, you’ve aced both now!
+- Crossing my fingers that this new role comes with better coffee! Cheers to you and your success.
+- It’s a wonder your boss hired you—were they dazzled by your charm or just desperate? Either way, congrats on landing the new gig.
+- Treat a new job like a new love affair; it’ll end if you take it for granted. Wishing you all the success!
+- Congratulations on the new job! Don’t forget to pack your sense of humour, you’ll need it for those Monday morning meetings.
+- They say laughter is the best medicine, so here’s a healthy dose of congratulations on your new job. Break a leg! (But not literally, please.)
+
+Present these in a clean, searchable or filterable selection panel with category tabs or dropdown filters:
+
+- **Good Luck**
+- **Farewell & Good Luck**
+- **Funny Congratulations**
+
+When a predefined message is selected, load it into the editable message field so the user can personalise, shorten, extend, or rewrite it before submission.
+
+### Font selection
+
+Provide exactly six handwriting-style italic font choices.
+
+Use Google Fonts or locally hosted fonts. Suggested style direction:
+
+- Caveat
+- Dancing Script
+- Great Vibes
+- Patrick Hand
+- Indie Flower
+- Homemade Apple
+
+Allow users to preview each font in the selector before choosing it. All messages should default to font size 16px, but ensure the layout remains readable and visually balanced.
+
+### Final page
+
+Create a distinctive final page after all message pages.
+
+Include:
+
+- A large, high-quality image or illustration of a bouquet of flowers.
+- The following message in a large italic greeting-card style:  
+  **“You will never be forgotten. Thank you for everything you have done for us.”**
+- Make the message prominent, elegant, and emotionally warm.
+- Use complementary colours and decorative styling consistent with the front cover.
+- Ensure the final page is always the last page, regardless of how many messages are added.
+
+### Technical and UX requirements
+
+- Use semantic HTML and accessible labels for all form fields and buttons.
+- Ensure colour contrast is sufficient for readability.
+- Make the interface responsive for desktop, tablet, and mobile.
+- Preserve the A4 card feel on desktop while adapting gracefully on smaller screens.
+- Store written messages, selected fonts, names, and voice recordings locally using localStorage or IndexedDB.
+- Include a “Reset card” or admin-style option only if it is clearly separated and requires confirmation.
+- Add subtle animations for page turns, message appearance, and button feedback, but avoid excessive motion.
+- Include graceful error handling for microphone access, local storage limits, and unsupported browsers.
+- Add brief on-screen instructions so users understand how to add a written or voice message.
+- Use original CSS and assets; do not reproduce copyrighted greeting-card artwork or exact designs.
+
+### Deliverables
+
+Provide:
+
+- A complete working web app.
+- Clean, commented code.
+- Separate HTML, CSS, and JavaScript files, unless using an existing React project structure.
+- A README explaining how to run the app locally.
+- Placeholder assets for Tracey’s photo and the final flower bouquet.
+- A clear structure that makes it easy later to replace local storage with a database or backend API.
