@@ -234,8 +234,55 @@ const CardStore = {
     return data;
   },
 
-  async remove() {
-    throw new StorageError("Individual messages cannot be deleted from the website.");
+  async getSession() {
+    if (archivePayload() || !readConfig()) return null;
+    const { data } = await getClient().auth.getSession();
+    return (data && data.session) || null;
+  },
+
+  onAuthChange(handler) {
+    if (archivePayload() || !readConfig()) return { data: { subscription: { unsubscribe() {} } } };
+    return getClient().auth.onAuthStateChange((_event, session) => handler(session));
+  },
+
+  async signIn(email, password) {
+    const { data, error } = await getClient().auth.signInWithPassword({ email, password });
+    if (error || !data || !data.session) {
+      throw new StorageError(apiMessage(error, "Sign-in failed. Check the email and password."), error);
+    }
+    return data.session;
+  },
+
+  async signOut() {
+    if (archivePayload() || !readConfig()) return;
+    await getClient().auth.signOut();
+  },
+
+  async remove(message) {
+    if (archivePayload()) {
+      throw new StorageError("This offline archive is read-only.");
+    }
+    if (!message || !message.id) {
+      throw new StorageError("That message could not be deleted.");
+    }
+    const session = await CardStore.getSession();
+    if (!session) {
+      throw new StorageError("Please sign in as admin to delete a message.");
+    }
+    const db = getClient();
+    if (message.type === "voice" && message.audioPath) {
+      const removed = await db.storage.from(BUCKET).remove([message.audioPath]);
+      if (removed.error) {
+        throw new StorageError(apiMessage(removed.error, "The voice file could not be deleted."), removed.error);
+      }
+    }
+    const { data, error } = await db.from("messages").delete().eq("id", message.id).select("id");
+    if (error) {
+      throw new StorageError(apiMessage(error, "The message could not be deleted."), error);
+    }
+    if (!data || !data.length) {
+      throw new StorageError("The message could not be deleted. Sign in as admin and run supabase/enable-admin-delete.sql.");
+    }
   },
 
   async clear() {

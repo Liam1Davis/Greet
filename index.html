@@ -54,6 +54,10 @@
   <footer class="app-footer">
     <span>Made with love by Tracey’s colleagues.</span>
     <button type="button" class="link-btn link-btn--muted" id="btn-admin">Admin</button>
+    <span class="admin-status" id="admin-status" hidden>
+      Admin Mode Active (<button type="button" class="link-btn link-btn--muted" id="btn-admin-logout">Log Out</button>)
+    </span>
+    <button type="button" class="link-btn link-btn--muted" id="btn-export" hidden>Export</button>
   </footer>
 
   <!-- Offscreen container used to measure notes before laying them out -->
@@ -225,6 +229,29 @@
     </div>
   </div>
 
+  <!-- Admin sign-in (Supabase Auth email + password) -->
+  <dialog class="dialog dialog--small dialog--admin-login" id="dialog-admin-login" aria-labelledby="dialog-admin-login-title">
+    <form method="dialog" class="dialog__form" id="form-admin-login" novalidate>
+      <header class="dialog__header">
+        <h2 class="dialog__title" id="dialog-admin-login-title">Admin</h2>
+        <button type="button" class="dialog__close" data-close aria-label="Close">×</button>
+      </header>
+      <div class="field">
+        <label for="admin-email">Email <span class="req" aria-hidden="true">*</span></label>
+        <input type="email" id="admin-email" name="email" autocomplete="username" required placeholder="you@example.com" />
+      </div>
+      <div class="field">
+        <label for="admin-password">Password <span class="req" aria-hidden="true">*</span></label>
+        <input type="password" id="admin-password" name="password" autocomplete="current-password" required />
+      </div>
+      <p class="field__error" id="admin-login-error" role="alert"></p>
+      <footer class="dialog__actions">
+        <button type="button" class="btn btn--ghost" data-close>Cancel</button>
+        <button type="submit" class="btn btn--primary" id="admin-login-submit">Sign in</button>
+      </footer>
+    </form>
+  </dialog>
+
   <!-- Organiser archive export. Shown only on localhost; this is not a login. -->
   <dialog class="dialog dialog--small" id="dialog-admin" aria-labelledby="dialog-admin-title">
     <form method="dialog" class="dialog__form" id="form-admin" novalidate>
@@ -242,7 +269,7 @@
         voice files. Unzip it and open <code>index.html</code> — no internet and no local server required.
       </p>
       <p class="dialog__hint">
-        The website cannot wipe the shared card. Delete messages in the Supabase dashboard if you need to.
+        The website cannot wipe the whole card. Use <strong>Admin</strong> to delete one message at a time, or delete rows in the Supabase dashboard.
       </p>
       <footer class="dialog__actions">
         <button type="button" class="btn btn--ghost" data-close>Cancel</button>

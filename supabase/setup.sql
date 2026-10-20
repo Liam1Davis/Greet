@@ -16,6 +16,8 @@
 --   * Anyone with the key can INSERT one new message of their own.
 --   * Nobody using the anon key can UPDATE or DELETE another person’s row.
 --   * Nobody using the anon key can wipe the card or delete storage objects.
+--   * A signed-in Auth user (the organiser) can DELETE one message at a time
+--     from the Admin footer control, including the matching voice file.
 --   * Voice files live in a PRIVATE bucket. The database stores the object
 --     path in audio_path only — never Base64 audio and never a signed URL.
 --   * Playback: the app requests a short-lived signed URL at play time.
@@ -182,6 +184,7 @@ alter table public.messages enable row level security;
 
 drop policy if exists "anyone can read messages" on public.messages;
 drop policy if exists "anyone can add a message" on public.messages;
+drop policy if exists "authenticated can delete messages" on public.messages;
 
 create policy "anyone can read messages"
   on public.messages
@@ -195,11 +198,19 @@ create policy "anyone can add a message"
   to anon, authenticated
   with check (true);
 
--- Intentionally no UPDATE or DELETE policies for anon/authenticated.
+create policy "authenticated can delete messages"
+  on public.messages
+  for delete
+  to authenticated
+  using (true);
+
+-- Anon still cannot update or delete. Authenticated (Admin sign-in) can delete.
 
 grant usage on schema public to anon, authenticated;
 grant select, insert on table public.messages to anon, authenticated;
-revoke update, delete on table public.messages from anon, authenticated;
+grant delete on table public.messages to authenticated;
+revoke update on table public.messages from anon, authenticated;
+revoke delete on table public.messages from anon;
 
 drop function if exists public.cleanup_orphan_audio(text);
 drop function if exists public.admin_reset_card(text);
@@ -233,6 +244,7 @@ drop policy if exists "anon can upload voice messages" on storage.objects;
 drop policy if exists "anon can read voice messages" on storage.objects;
 drop policy if exists "anon can delete voice messages" on storage.objects;
 drop policy if exists "anon can update voice messages" on storage.objects;
+drop policy if exists "authenticated can delete voice messages" on storage.objects;
 
 create policy "anon can upload voice messages"
   on storage.objects
@@ -244,4 +256,10 @@ create policy "anon can read voice messages"
   on storage.objects
   for select
   to anon, authenticated
+  using (bucket_id = 'voice-messages');
+
+create policy "authenticated can delete voice messages"
+  on storage.objects
+  for delete
+  to authenticated
   using (bucket_id = 'voice-messages');

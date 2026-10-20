@@ -14,14 +14,17 @@ This card has **no contributor logins**. The browser uses the public anon/publis
 | --- | --- |
 | Read all messages | Anyone with the website (and therefore the anon key) |
 | Add a written or voice message | Anyone with the website |
-| Change or delete someone else’s message | Nobody via the website |
+| Change someone else’s message | Nobody via the website |
+| Delete one message | Organiser, after **Admin** sign-in with a Supabase Auth email and password |
 | Play a voice message | Anyone with the website, via a short-lived signed URL |
-| Wipe the card | **Not available on the website.** Use the Supabase dashboard |
+| Wipe the whole card | **Not available on the website.** Use the Supabase dashboard |
 | Export an offline archive | Shown only when you open the site on `localhost` on your computer |
 
 A private Storage bucket plus signed URLs is **not** the same as authenticating visitors. An unlisted Netlify address is **not** access control. Anyone who has the website can read messages and request playback URLs.
 
-The Admin / Export control is hidden on the public site and shown only on `localhost`. That is a convenience so colleagues do not see it. It is **not** a password and **not** backend authentication. Anyone who can run the project locally with the same configuration could export.
+**Admin** in the footer opens an email/password sign-in. That uses Supabase Authentication, not a password hardcoded in the website. Create the user in **Authentication → Users**. After sign-in, a delete control appears on each note. Visitors who are not signed in never see those controls.
+
+**Export** stays on `localhost` only. That is a convenience so colleagues do not see it. It is **not** a password and **not** backend authentication.
 
 Never put the **service_role** key, other secret keys, or the database password in any frontend file or GitHub.
 
@@ -43,9 +46,11 @@ Leave the placeholders (`YOUR-PROJECT`, `YOUR-PUBLISHABLE-ANON-KEY`) and the app
 2. **SQL Editor** → New query.
 3. Run all of [supabase/setup.sql](supabase/setup.sql).  
    It is safe to re-run. If `public.messages` already exists with dashboard names (`audio_key`, `contributor_name`, and so on), those columns are renamed to the names the app uses. Rows are not deleted.
-4. Confirm **Storage → Buckets** shows `voice-messages` as **private**, 5 MB limit.
-5. Confirm **Table Editor → messages** shows `audio_path` (not `audio_key`) plus `type`, `name`, `text`, `font`, `duration`, and `mime_type`.
-6. Redeploy on Netlify (`main`, empty base, empty build, publish `.`) or refresh a local server.
+   If the project is already live and you only need Admin delete, run [supabase/enable-admin-delete.sql](supabase/enable-admin-delete.sql) instead.
+4. **Authentication → Users → Add user** with the organiser email and password. Use that pair in the footer **Admin** control.
+5. Confirm **Storage → Buckets** shows `voice-messages` as **private**, 5 MB limit. Admin delete removes the object from this bucket, then the `public.messages` row.
+6. Confirm **Table Editor → messages** shows `audio_path` (not `audio_key`) plus `type`, `name`, `text`, `font`, `duration`, and `mime_type`.
+7. Redeploy on Netlify (`main`, empty base, empty build, publish `.`) or refresh a local server.
 
 **Enabling RLS without the policies in `setup.sql` would hide every row from the API.**
 

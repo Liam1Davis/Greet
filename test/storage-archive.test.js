@@ -115,7 +115,17 @@ async function run() {
   assert.doesNotMatch(sql, /create or replace function public\.cleanup_orphan_audio/);
   assert.doesNotMatch(sql, /create or replace function public\.admin_reset_card/);
   assert.doesNotMatch(sql, /service_role/);
-  console.log("PASS setup.sql has RLS and no public wipe/delete RPCs");
+  assert.match(sql, /authenticated can delete messages/);
+  assert.match(sql, /authenticated can delete voice messages/);
+  assert.match(sql, /grant delete on table public.messages to authenticated/);
+  assert.match(sql, /revoke delete on table public.messages from anon/);
+  console.log("PASS setup.sql has RLS, authenticated admin delete, and no public wipe RPCs");
+
+  const adminSql = fs.readFileSync(path.join(root, "supabase/enable-admin-delete.sql"), "utf8");
+  assert.match(adminSql, /authenticated can delete messages/);
+  assert.match(adminSql, /voice-messages/);
+  assert.doesNotMatch(adminSql, /delete from public\.messages/i);
+  console.log("PASS enable-admin-delete.sql grants authenticated delete without wiping rows");
 
   const align = fs.readFileSync(path.join(root, "supabase/align-existing-messages.sql"), "utf8");
   assert.match(align, /NOT NULL DEFAULT 'Caveat'/);
@@ -200,6 +210,83 @@ async function run() {
   assert.ok(voiceRow.audio_path && !String(voiceRow.audio_path).startsWith("http"));
   assert.strictEqual(saved.type, "voice");
   console.log("PASS voice insert sends type, null text/font, duration, and audio_path");
+
+  let removeBlocked = false;
+  try {
+    await store.remove({ id: "x", type: "text", name: "Sam" });
+  } catch (err) {
+    removeBlocked = /admin|not configured|cannot/i.test(err.message);
+  }
+  assert.ok(removeBlocked, "unconfigured live mode cannot delete messages");
+  console.log("PASS unconfigured remove is blocked");
+
+  const deleted = { storage: [], rows: [] };
+  const adminWin = makeWindow();
+  adminWin.window.LEAVING_CARD_SUPABASE = {
+    url: "https://example.supabase.co",
+    anonKey: "test-publishable-anon-key",
+  };
+  adminWin.window.supabase = {
+    createClient() {
+      return {
+        auth: {
+          async getSession() {
+            return { data: { session: { user: { id: "admin-1" } } }, error: null };
+          },
+          async signInWithPassword({ email, password }) {
+            assert.strictEqual(email, "a@b.c");
+            assert.strictEqual(password, "secret");
+            return { data: { session: { user: { id: "admin-1" } } }, error: null };
+          },
+        },
+        storage: {
+          from(bucket) {
+            assert.strictEqual(bucket, "voice-messages");
+            return {
+              remove: async (paths) => {
+                deleted.storage.push(paths);
+                return { error: null };
+              },
+            };
+          },
+        },
+        from(table) {
+          assert.strictEqual(table, "messages");
+          return {
+            delete() {
+              return {
+                eq(col, id) {
+                  assert.strictEqual(col, "id");
+                  return {
+                    select() {
+                      deleted.rows.push(id);
+                      return Promise.resolve({ data: [{ id }], error: null });
+                    },
+                  };
+                },
+              };
+            },
+          };
+        },
+      };
+    },
+  };
+  loadScript("js/storage.js", adminWin);
+  const adminStore = adminWin.window.LeavingCard.storage.CardStore;
+  const session = await adminStore.signIn("a@b.c", "secret");
+  assert.ok(session && session.user.id === "admin-1");
+  await adminStore.remove({
+    id: "msg-1",
+    type: "voice",
+    name: "Sam",
+    audioPath: "sam/voice.webm",
+  });
+  assert.ok(deleted.storage[0]);
+  assert.strictEqual(deleted.storage[0].length, 1);
+  assert.strictEqual(String(deleted.storage[0][0]), "sam/voice.webm");
+  assert.strictEqual(deleted.rows.length, 1);
+  assert.strictEqual(deleted.rows[0], "msg-1");
+  console.log("PASS admin remove deletes the voice object then the message row");
 
   console.log("All storage/archive tests passed");
 }

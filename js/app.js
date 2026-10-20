@@ -44,6 +44,7 @@ const state = {
   pageMap: new Map(), // message id → page index (for jumping to a new note)
   persistent: true,
   featureVideoRatio: { w: 1, h: 1 },
+  adminSession: null,
 };
 
 /* ------------------------------------------------------------------------ */
@@ -492,6 +493,7 @@ function renderMessagePage(placedNotes, pageNumber, totalMessagePages, options =
     node.style.setProperty("--note-transform", `rotate(${placed.rotation}deg)`);
     node.style.transform = `rotate(${placed.rotation}deg)`;
     node.style.animationDelay = `${Math.min(i * 40, 400)}ms`;
+    attachAdminDelete(node, placed.message);
     children.push(node);
   });
 
@@ -524,6 +526,50 @@ function parkContributeControls() {
   const controls = $("#contribute-controls");
   const dock = $("#contribute-dock");
   if (controls && dock) dock.append(controls);
+}
+
+function isAdmin() {
+  return Boolean(state.adminSession) && !CardStore.isArchive();
+}
+
+function attachAdminDelete(node, message) {
+  if (!isAdmin() || !message || !message.id) return;
+  const btn = el("button", {
+    type: "button",
+    class: "note-delete",
+    "aria-label": `Delete message from ${message.name || "this sender"}`,
+    text: "×",
+  });
+  const stop = (e) => e.stopPropagation();
+  btn.addEventListener("pointerdown", stop);
+  btn.addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    requestDeleteMessage(message);
+  });
+  node.append(btn);
+}
+
+async function requestDeleteMessage(message) {
+  const sender = (message && message.name) || "this sender";
+  if (!window.confirm(`Delete this message from ${sender}?`)) return;
+  try {
+    await CardStore.remove(message);
+    state.messages = state.messages.filter((item) => item.id !== message.id);
+    toast("That message has been removed from the card.");
+    render();
+  } catch (err) {
+    console.error(err);
+    toast(err instanceof StorageError ? err.message : "Sorry, that message could not be deleted.", { type: "error" });
+  }
+}
+
+function applyAdminSession(session) {
+  const nextId = session && session.user && session.user.id;
+  const prevId = state.adminSession && state.adminSession.user && state.adminSession.user.id;
+  state.adminSession = session || null;
+  syncChrome();
+  if (nextId !== prevId) render();
 }
 
 function featureVideoPageIndex() {
@@ -624,9 +670,13 @@ function syncChrome() {
   applyBookFrame();
 
   const adminBtn = $("#btn-admin");
-  if (adminBtn) {
-    adminBtn.hidden = CardStore.isArchive() || !isOrganiserHost();
-  }
+  const adminStatus = $("#admin-status");
+  const exportBtn = $("#btn-export");
+  const signedIn = Boolean(state.adminSession);
+  if (adminBtn) adminBtn.hidden = CardStore.isArchive() || signedIn;
+  if (adminStatus) adminStatus.hidden = CardStore.isArchive() || !signedIn;
+  if (exportBtn) exportBtn.hidden = CardStore.isArchive() || !isOrganiserHost();
+  document.body.classList.toggle("is-admin", signedIn && !CardStore.isArchive());
   const controls = $("#contribute-controls");
   if (controls && !CardStore.isArchive()) {
     controls.hidden = !contributePageIsVisible(index);
@@ -1153,11 +1203,77 @@ setupDialogClose(voiceDialog);
 $("#btn-add-voice").addEventListener("click", openVoiceDialog);
 
 /* ------------------------------------------------------------------------ */
-/* Organiser archive (localhost only — this is not authentication)            */
+/* Admin sign-in (Supabase Auth) and localhost archive export                 */
 /* ------------------------------------------------------------------------ */
 
+const adminLoginDialog = $("#dialog-admin-login");
+const adminLoginForm = $("#form-admin-login");
+const adminEmail = $("#admin-email");
+const adminPassword = $("#admin-password");
+const adminLoginError = $("#admin-login-error");
+const adminLoginSubmit = $("#admin-login-submit");
 const adminDialog = $("#dialog-admin");
 const adminExport = $("#admin-export");
+
+function openAdminLogin() {
+  if (CardStore.isArchive() || !CardStore.isConfigured()) return;
+  if (adminLoginError) adminLoginError.textContent = "";
+  if (adminLoginForm) adminLoginForm.reset();
+  adminLoginDialog.showModal();
+  if (adminEmail) adminEmail.focus({ preventScroll: true });
+}
+
+if (adminLoginForm) {
+  adminLoginForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (adminLoginError) adminLoginError.textContent = "";
+    const email = adminEmail ? adminEmail.value.trim() : "";
+    const password = adminPassword ? adminPassword.value : "";
+    if (!email || !password) {
+      if (adminLoginError) adminLoginError.textContent = "Enter your email and password.";
+      return;
+    }
+    if (adminLoginSubmit) adminLoginSubmit.disabled = true;
+    try {
+      const session = await CardStore.signIn(email, password);
+      applyAdminSession(session);
+      adminLoginForm.reset();
+      adminLoginDialog.close();
+      toast("Admin mode is on. You can delete messages from the card.");
+    } catch (err) {
+      if (adminLoginError) {
+        adminLoginError.textContent = err instanceof StorageError ? err.message : "Sign-in failed. Check the email and password.";
+      }
+    } finally {
+      if (adminLoginSubmit) adminLoginSubmit.disabled = false;
+    }
+  });
+}
+if (adminLoginDialog) setupDialogClose(adminLoginDialog);
+
+const adminBtn = $("#btn-admin");
+if (adminBtn) {
+  adminBtn.addEventListener("click", () => {
+    if (CardStore.isArchive()) return;
+    if (!CardStore.isConfigured()) {
+      toast("The shared card is not connected yet.", { type: "error" });
+      return;
+    }
+    openAdminLogin();
+  });
+}
+const adminLogout = $("#btn-admin-logout");
+if (adminLogout) {
+  adminLogout.addEventListener("click", async () => {
+    try {
+      await CardStore.signOut();
+    } catch (err) {
+      console.error(err);
+    }
+    applyAdminSession(null);
+    toast("Signed out of admin mode.");
+  });
+}
 
 if (adminExport) {
   adminExport.addEventListener("click", async () => {
@@ -1177,9 +1293,9 @@ if (adminExport) {
 if (adminDialog) {
   setupDialogClose(adminDialog);
 }
-const adminBtn = $("#btn-admin");
-if (adminBtn) {
-  adminBtn.addEventListener("click", () => {
+const exportBtn = $("#btn-export");
+if (exportBtn) {
+  exportBtn.addEventListener("click", () => {
     if (!isOrganiserHost() || CardStore.isArchive()) return;
     adminDialog.showModal();
   });
@@ -1209,13 +1325,23 @@ async function init() {
   }
 
   try {
-    const [messages] = await Promise.all([CardStore.getAll(), ratioReady]);
+    const [messages, session] = await Promise.all([
+      CardStore.getAll(),
+      CardStore.getSession().catch(() => null),
+      ratioReady,
+    ]);
     state.messages = messages;
+    state.adminSession = session;
   } catch (err) {
     await ratioReady;
     toast(err instanceof StorageError ? err.message : "Could not load the shared card.", { type: "error", duration: 8000 });
     render();
     return;
+  }
+  try {
+    CardStore.onAuthChange((session) => applyAdminSession(session));
+  } catch (err) {
+    console.error(err);
   }
   render();
   await preloadFonts();

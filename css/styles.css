@@ -187,6 +187,11 @@ body {
   padding: 8px 16px 14px;
   font-size: 12px;
   color: var(--ink-soft);
+  flex-wrap: wrap;
+}
+.admin-status {
+  font-size: 12px;
+  color: var(--ink-soft);
 }
 
 /* 3. Buttons & controls
@@ -212,6 +217,7 @@ body {
 .nav-btn:focus-visible,
 .tab:focus-visible,
 .link-btn:focus-visible,
+.note-delete:focus-visible,
 input:focus-visible,
 textarea:focus-visible,
 .dialog__close:focus-visible,
@@ -878,6 +884,29 @@ body.on-cover .nav-btn--next:not([disabled]) {
 .voice-note__name::before {
   content: "— ";
 }
+.note-delete {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  z-index: 6;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: rgba(44, 62, 90, 0.88);
+  color: var(--white);
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.note-delete:hover,
+.note-delete:focus-visible {
+  background: var(--danger);
+}
 
 /* 7b. Pinned parody video on the first message page
    ========================================================================== */
@@ -1007,6 +1036,11 @@ body.on-cover .nav-btn--next:not([disabled]) {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  max-height: calc(100dvh - 24px);
+  overflow: auto;
+}
+.dialog--admin-login {
+  width: min(400px, calc(100vw - 20px));
 }
 .dialog__header {
   display: flex;
@@ -1126,6 +1160,8 @@ body.on-cover .nav-btn--next:not([disabled]) {
 }
 .field input[type="text"],
 .field input[type="search"],
+.field input[type="email"],
+.field input[type="password"],
 .field textarea,
 .library__controls input[type="search"] {
   font: inherit;
@@ -1532,6 +1568,22 @@ body.on-cover .nav-btn--next:not([disabled]) {
   }
   .dialog {
     width: min(720px, calc(100vw - 20px));
+  }
+  .dialog--admin-login,
+  .dialog--small {
+    width: min(400px, calc(100vw - 16px));
+    max-height: calc(100dvh - 12px);
+  }
+  .dialog--admin-login .dialog__actions {
+    position: sticky;
+    bottom: 0;
+    background: var(--paper);
+    padding-bottom: 8px;
+  }
+  .note-delete {
+    width: 28px;
+    height: 28px;
+    font-size: 16px;
   }
   .feature-video {
     padding: 6px 6px 7px;
