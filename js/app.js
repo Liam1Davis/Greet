@@ -16,30 +16,34 @@
 const { CardStore, StorageError } = LC.storage;
 const { FONTS, DEFAULT_FONT_ID, getFont, preloadFonts } = LC.fonts;
 const { CATEGORIES, searchLibrary } = LC.library;
-const { layoutMessages } = LC.layout;
+const { layoutMessages, computePageSize, contentMetrics } = LC.layout;
 const { Book } = LC;
 
 /* ------------------------------------------------------------------------ */
 /* Constants & state                                                         */
 /* ------------------------------------------------------------------------ */
 
-const A4_RATIO = Math.SQRT2; // long side / short side
-const MAX_LANDSCAPE_WIDTH = 1123; // A4 landscape @ 96dpi
-const MAX_PORTRAIT_WIDTH = 794;
-const MAX_RECORD_SECONDS = 120;
+const MAX_RECORD_SECONDS = 180;
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const CONTRIBUTE_INDEX = 1;
 
 /** Tracey's photo. If this file is missing the placeholder is shown instead. */
 const COVER_PHOTO_SRC = "assets/tracey.jpg";
 const COVER_PHOTO_FALLBACK = "assets/tracey-placeholder.svg";
+const FEATURE_VIDEO_SRC = "Video/Parrot-AI-20261019-Tracey.mp4";
+const FEATURE_VIDEO_TITLE = "A special address by the leader of the Free World, Donald R. Trump (POTUS)";
+const FEATURE_VIDEO_SUBTITLE = "A farewell parody address for Tracey";
 
-const COVER_HEADING = "Good Luck In Your New Job and We Are Going To Miss You!!!";
-const FINAL_MESSAGE = "You will never be forgotten. Thank you for everything you have done for us.";
+const COVER_HEADING = "Good Luck In Your New Job. We Are All Going To MISS YOU!!!";
+const FINAL_MESSAGE =
+  "You have been such a great support to us all — always calm, collected and positive. We’re all going to miss you dearly. Thank you for everything.";
 
 const state = {
   messages: [],
   pageSize: { w: 0, h: 0 },
   pageMap: new Map(), // message id → page index (for jumping to a new note)
   persistent: true,
+  featureVideoRatio: { w: 1, h: 1 },
 };
 
 /* ------------------------------------------------------------------------ */
@@ -113,7 +117,7 @@ const stageEl = $("#stage");
 const bookEl = $("#book");
 const bookWrapEl = $(".book-wrap");
 
-function computePageSize() {
+function measureStage() {
   const stageRect = stageEl.getBoundingClientRect();
   const styles = getComputedStyle(stageEl);
   const padX = parseFloat(styles.paddingLeft) + parseFloat(styles.paddingRight);
@@ -121,38 +125,32 @@ function computePageSize() {
 
   const navVisible = getComputedStyle($("#btn-prev")).display !== "none";
   const navAllowance = navVisible ? 2 * (46 + 12) : 0;
+  const gutter = window.innerWidth <= 760 ? 8 : 0;
+  let availW = stageRect.width - padX - navAllowance - gutter;
+  let availH = stageRect.height - padY;
 
-  const availW = Math.max(280, stageRect.width - padX - navAllowance);
-  const availH = Math.max(320, stageRect.height - padY);
-
-  let w;
-  let h;
-  if (availW >= availH) {
-    // Landscape A4
-    w = Math.min(MAX_LANDSCAPE_WIDTH, availW);
-    h = w / A4_RATIO;
-    if (h > availH) {
-      h = availH;
-      w = h * A4_RATIO;
-    }
-  } else {
-    // Portrait A4 (small / tall screens)
-    w = Math.min(MAX_PORTRAIT_WIDTH, availW);
-    h = w * A4_RATIO;
-    if (h > availH) {
-      h = availH;
-      w = h / A4_RATIO;
-    }
+  if (!Number.isFinite(availW) || availW < 120) {
+    availW = Math.max(120, window.innerWidth - padX - navAllowance - 24);
   }
-  return { w: Math.floor(w), h: Math.floor(h) };
+  if (!Number.isFinite(availH) || availH < 160) {
+    availH = Math.max(160, window.innerHeight * 0.5);
+  }
+
+  return {
+    w: Math.min(availW, window.innerWidth - 16),
+    h: Math.min(availH, window.innerHeight - 16),
+  };
 }
 
-function applyPageSize(size) {
-  state.pageSize = size;
-  bookEl.style.width = `${size.w}px`;
-  bookEl.style.height = `${size.h}px`;
-  bookWrapEl.style.width = `${size.w}px`;
-  bookWrapEl.style.height = `${size.h}px`;
+function applyBookFrame() {
+  const { w, h } = state.pageSize;
+  const spread = book.isShowingSpread();
+  bookEl.style.setProperty("--page-w", `${w}px`);
+  bookEl.style.setProperty("--page-h", `${h}px`);
+  bookEl.style.width = `${spread ? w * 2 : w}px`;
+  bookEl.style.height = `${h}px`;
+  bookWrapEl.style.width = bookEl.style.width;
+  bookWrapEl.style.height = `${h}px`;
 }
 
 /* ------------------------------------------------------------------------ */
@@ -224,6 +222,7 @@ function createVoiceNote(message) {
       }
       if (audio.paused) {
         if (activeAudio && activeAudio !== audio) activeAudio.pause();
+        pauseFeatureVideos();
         activeAudio = audio;
         await audio.play();
       } else {
@@ -248,18 +247,146 @@ function createNoteElement(message, opts) {
   return message.type === "voice" ? createVoiceNote(message) : createTextNote(message, opts);
 }
 
+function applyFeatureVideoRatio() {
+  const { w, h } = state.featureVideoRatio;
+  document.documentElement.style.setProperty("--feature-video-ratio", `${w} / ${h}`);
+}
+
+function probeFeatureVideoRatio() {
+  applyFeatureVideoRatio();
+  return new Promise((resolve) => {
+    const video = document.createElement("video");
+    video.preload = "metadata";
+    video.muted = true;
+    video.playsInline = true;
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      if (video.videoWidth > 0 && video.videoHeight > 0) {
+        state.featureVideoRatio = { w: video.videoWidth, h: video.videoHeight };
+        applyFeatureVideoRatio();
+      }
+      video.removeAttribute("src");
+      video.load();
+      resolve();
+    };
+    video.addEventListener("loadedmetadata", finish, { once: true });
+    video.addEventListener("error", finish, { once: true });
+    setTimeout(finish, 2000);
+    video.src = FEATURE_VIDEO_SRC;
+  });
+}
+
+function pauseFeatureVideos(except) {
+  $$(".feature-video__player", bookEl).forEach((video) => {
+    if (except && video === except) return;
+    video.pause();
+  });
+}
+
+function createFeatureVideoCard({ measure = false } = {}) {
+  const video = el("video", {
+    class: "feature-video__player",
+    controls: true,
+    playsinline: true,
+    preload: "metadata",
+  });
+  video.setAttribute("playsinline", "");
+  video.setAttribute("webkit-playsinline", "");
+  if (!measure) video.append(el("source", { src: FEATURE_VIDEO_SRC, type: "video/mp4" }));
+
+  video.addEventListener("play", () => {
+    if (activeAudio) activeAudio.pause();
+    pauseFeatureVideos(video);
+  });
+
+  return el("aside", {
+    class: "feature-video",
+    "aria-label": FEATURE_VIDEO_TITLE,
+  }, [
+    el("h3", { class: "feature-video__title", text: FEATURE_VIDEO_TITLE }),
+    el("p", { class: "feature-video__subtitle", text: FEATURE_VIDEO_SUBTITLE }),
+    el("div", { class: "feature-video__frame" }, [video]),
+  ]);
+}
+
+function featureVideoCardWidth(areaW) {
+  if (areaW < 220) return areaW;
+  return Math.min(areaW, Math.max(180, Math.round(areaW * 0.46)));
+}
+
+function placeFeatureVideo(metrics) {
+  const { pad, areaW, areaH } = metrics;
+  const cardW = featureVideoCardWidth(areaW);
+  const maxCardH = Math.min(areaH, Math.max(120, Math.round(areaH * (areaW < 220 ? 0.5 : 0.42))));
+  const ratio = state.featureVideoRatio.h / Math.max(state.featureVideoRatio.w, 1);
+  const frameH = Math.max(72, Math.min(Math.round(cardW * ratio), maxCardH - 54));
+  const card = createFeatureVideoCard();
+  const frame = card.querySelector(".feature-video__frame");
+  if (frame) {
+    frame.style.height = `${frameH}px`;
+    frame.style.aspectRatio = "auto";
+  }
+  const size = measureFeatureVideo(cardW, maxCardH, card);
+  const height = Math.min(Math.max(Math.ceil(size.h + 6), frameH + 36), maxCardH);
+  const x = Math.max(0, areaW - cardW);
+  card.style.left = `${pad + x}px`;
+  card.style.top = `${pad}px`;
+  card.style.width = `${cardW}px`;
+  card.style.maxHeight = `${height}px`;
+  return { card, reserved: { x, y: 0, w: cardW, h: height } };
+}
+
 /* Measurement: render a note offscreen at a given width and read its size. */
 const measureRoot = $("#measure-root");
-function measureNote(message, width) {
+function withPageMeasure(fn) {
   measureRoot.style.width = `${state.pageSize.w}px`;
-  const node = createNoteElement(message);
-  node.style.position = "static";
-  node.style.animation = "none";
-  node.style.width = `${width}px`;
-  measureRoot.append(node);
-  const rect = node.getBoundingClientRect();
-  node.remove();
-  return { w: rect.width, h: rect.height };
+  measureRoot.style.height = `${state.pageSize.h}px`;
+  measureRoot.style.containerType = "size";
+  try {
+    return fn();
+  } finally {
+    measureRoot.style.height = "";
+    measureRoot.style.containerType = "";
+  }
+}
+
+function measureNote(message, width) {
+  return withPageMeasure(() => {
+    const node = createNoteElement(message);
+    node.style.position = "static";
+    node.style.animation = "none";
+    node.style.width = `${width}px`;
+    measureRoot.append(node);
+    const rect = node.getBoundingClientRect();
+    node.remove();
+    return { w: rect.width, h: rect.height };
+  });
+}
+
+function measureFeatureVideo(width, maxHeight, existing) {
+  return withPageMeasure(() => {
+    const node = existing || createFeatureVideoCard({ measure: true });
+    const prev = {
+      position: node.style.position,
+      animation: node.style.animation,
+      width: node.style.width,
+      maxHeight: node.style.maxHeight,
+    };
+    node.style.position = "static";
+    node.style.animation = "none";
+    node.style.width = `${width}px`;
+    if (maxHeight) node.style.maxHeight = `${maxHeight}px`;
+    measureRoot.append(node);
+    const rect = node.getBoundingClientRect();
+    node.remove();
+    node.style.position = prev.position;
+    node.style.animation = prev.animation;
+    node.style.width = prev.width;
+    node.style.maxHeight = prev.maxHeight;
+    return { w: rect.width, h: rect.height };
+  });
 }
 
 /* ------------------------------------------------------------------------ */
@@ -276,12 +403,23 @@ function createPage(kind, children) {
 function renderCover() {
   const flourishTl = el("div", { class: "cover-flourish cover-flourish--tl", html: FLOURISH_SVG, "aria-hidden": "true" });
   const flourishBr = el("div", { class: "cover-flourish cover-flourish--br", html: FLOURISH_SVG, "aria-hidden": "true" });
+  const ctaLabel = CardStore.isArchive() ? "Open your card →" : "Turn the page to leave your message →";
+  const cta = el("button", {
+    type: "button",
+    class: "cover-cta",
+    text: ctaLabel,
+    onclick: () => book.goTo(CONTRIBUTE_INDEX),
+  });
   return createPage("cover", [
     el("div", { class: "cover-frame", "aria-hidden": "true" }),
     el("div", { class: "cover-ribbon", "aria-hidden": "true" }),
     flourishTl,
     flourishBr,
-    el("h2", { class: "cover-heading", text: COVER_HEADING }),
+    el("h2", { class: "cover-heading" }, [
+      el("span", { class: "cover-heading__line", text: "Good Luck In Your New Job." }),
+      el("span", { class: "cover-heading__line", text: "We Are All Going To" }),
+      el("span", { class: "cover-heading__miss", text: "MISS YOU!!!" }),
+    ]),
     el("div", { class: "cover-ornament", "aria-hidden": "true", text: "✦" }),
     el("figure", { class: "cover-photo" }, [
       el("img", {
@@ -291,7 +429,6 @@ function renderCover() {
         width: 240,
         height: 240,
         onerror: (e) => {
-          // Photo not found: show the labelled placeholder instead.
           if (e.target.src.endsWith(COVER_PHOTO_FALLBACK)) return;
           e.target.src = COVER_PHOTO_FALLBACK;
           e.target.alt = "Placeholder for a photo of Tracey";
@@ -301,16 +438,44 @@ function renderCover() {
       el("figcaption", { class: "cover-photo__label", text: "Photo of Tracey" }),
     ]),
     el("p", { class: "cover-for", text: "For Tracey" }),
+    cta,
   ]);
 }
 
-function renderMessagePage(placedNotes, pageNumber, totalMessagePages) {
+function renderContributePage() {
+  const slot = el("div", { class: "contribute-slot" });
+  const controls = $("#contribute-controls");
+  if (controls) {
+    controls.hidden = CardStore.isArchive();
+    slot.append(controls);
+  }
+  return createPage("contribute", [
+    el("div", { class: "page-corner page-corner--tr", html: CORNER_SVG, "aria-hidden": "true" }),
+    el("div", { class: "page-corner page-corner--bl", html: CORNER_SVG, "aria-hidden": "true" }),
+    el("p", { class: "contribute-kicker", text: "Page 2" }),
+    el("h2", { class: "contribute-title", text: "Leave your message" }),
+    el("p", {
+      class: "contribute-copy",
+      html: CardStore.isArchive()
+        ? "This is an offline archive of Tracey’s card. Turn the pages to read every note. New messages cannot be added here."
+        : "Turn the pages with the arrows, your keyboard’s arrow keys, or by swiping. Use <strong>Add your message</strong> to write a note in your own handwriting style, or <strong>Record a voice message</strong> to leave Tracey a spoken farewell.",
+    }),
+    slot,
+    state.messages.length === 0 && !CardStore.isArchive()
+      ? el("p", { class: "contribute-empty", text: "No messages yet — be the first to add a note or a voice message for Tracey." })
+      : null,
+  ]);
+}
+
+function renderMessagePage(placedNotes, pageNumber, totalMessagePages, options = {}) {
   const children = [
     el("div", { class: "page-corner page-corner--tr", html: CORNER_SVG, "aria-hidden": "true" }),
     el("div", { class: "page-corner page-corner--bl", html: CORNER_SVG, "aria-hidden": "true" }),
   ];
 
-  if (placedNotes.length === 0) {
+  if (options.featureCard) children.push(options.featureCard);
+
+  if (placedNotes.length === 0 && !options.featureCard) {
     children.push(
       el("p", {
         class: "empty-hint",
@@ -341,31 +506,68 @@ function renderFinalPage() {
     el("img", {
       class: "final-bouquet",
       src: "assets/bouquet.svg",
-      alt: "A bouquet of flowers",
-      width: 380,
-      height: 380,
+      alt: "Watercolour bouquet of blush roses, ivory blooms, muted lilac flowers and soft green foliage",
+      width: 320,
+      height: 420,
     }),
-    el("p", { class: "final-message", text: FINAL_MESSAGE }),
+    el("p", { class: "final-message" }, [
+      el("span", { class: "final-message__line", text: "You have been such a great support to us all —" }),
+      el("span", { class: "final-message__line", text: "always calm, collected and positive." }),
+      el("span", { class: "final-message__line", text: "We’re all going to miss you dearly." }),
+      el("span", { class: "final-message__line", text: "Thank you for everything." }),
+    ]),
     el("p", { class: "final-sign", text: "With love from all of us" }),
   ]);
 }
 
+function parkContributeControls() {
+  const controls = $("#contribute-controls");
+  const dock = $("#contribute-dock");
+  if (controls && dock) dock.append(controls);
+}
+
+function featureVideoPageIndex() {
+  return CONTRIBUTE_INDEX + 1;
+}
+
+function featureVideoPageIsVisible(index = book.index) {
+  const videoIndex = featureVideoPageIndex();
+  if (index === videoIndex) return true;
+  return book.isShowingSpread() && index + 1 === videoIndex;
+}
+
+function pauseHiddenFeatureVideo() {
+  if (!featureVideoPageIsVisible()) pauseFeatureVideos();
+}
+
 /** Dispose old notes (revoke blob URLs), then rebuild all pages. */
 function render({ focusMessageId = null } = {}) {
+  parkContributeControls();
+  pauseFeatureVideos();
   $$(".voice-note", bookEl).forEach((n) => n.dispatchEvent(new Event("note:dispose")));
   if (activeAudio) {
     activeAudio.pause();
     activeAudio = null;
   }
 
-  applyPageSize(computePageSize());
+  const size = computePageSize(measureStage().w, measureStage().h);
+  state.pageSize = { w: size.w, h: size.h };
+  book.setSpreadCapable(size.canSpread);
 
-  const layout = layoutMessages(state.messages, state.pageSize.w, state.pageSize.h, measureNote);
+  const metrics = contentMetrics(state.pageSize.w, state.pageSize.h);
+  const feature = placeFeatureVideo(metrics);
+  const layout = layoutMessages(state.messages, state.pageSize.w, state.pageSize.h, measureNote, {
+    reserveFirstPage: feature.reserved,
+  });
   state.pageMap.clear();
-  layout.forEach((notes, pageIdx) => notes.forEach((n) => state.pageMap.set(n.message.id, pageIdx + 1)));
+  layout.forEach((notes, pageIdx) => notes.forEach((n) => state.pageMap.set(n.message.id, pageIdx + 2)));
 
-  const pages = [renderCover()];
-  layout.forEach((notes, i) => pages.push(renderMessagePage(notes, i + 1, layout.length)));
+  const pages = [renderCover(), renderContributePage()];
+  layout.forEach((notes, i) => {
+    pages.push(
+      renderMessagePage(notes, i + 1, layout.length, i === 0 ? { featureCard: feature.card } : {}),
+    );
+  });
   pages.push(renderFinalPage());
 
   bookEl.replaceChildren(...pages);
@@ -375,6 +577,8 @@ function render({ focusMessageId = null } = {}) {
     targetIndex = state.pageMap.get(focusMessageId);
   }
   book.setPages(pages, targetIndex);
+  applyBookFrame();
+  syncChrome();
 }
 
 /* ------------------------------------------------------------------------ */
@@ -387,15 +591,52 @@ const btnNext = $("#btn-next");
 const edgePrev = $("#edge-prev");
 const edgeNext = $("#edge-next");
 
+function isOrganiserHost() {
+  const host = location.hostname;
+  return host === "localhost" || host === "127.0.0.1" || host === "[::1]";
+}
+
+function contributePageIsVisible(index = book.index) {
+  if (index === CONTRIBUTE_INDEX) return true;
+  return book.isShowingSpread() && index + 1 === CONTRIBUTE_INDEX;
+}
+
+function hasMessageDraft() {
+  return Boolean(msgName.value.trim() || msgText.value.trim() || msgState.selectedLibraryText);
+}
+
+function hasVoiceDraft() {
+  return Boolean(voiceName.value.trim() || rec.blob);
+}
+
+function syncChrome() {
+  const index = book.index;
+  const total = book.total;
+  indicatorEl.textContent = `Page ${index + 1} of ${total}`;
+  const atStart = index === 0;
+  const atEnd = index === total - 1;
+  btnPrev.disabled = atStart;
+  edgePrev.disabled = atStart;
+  btnNext.disabled = atEnd;
+  edgeNext.disabled = atEnd;
+  document.body.classList.toggle("on-cover", index === 0);
+  document.body.classList.toggle("on-contribute", contributePageIsVisible(index));
+  applyBookFrame();
+
+  const adminBtn = $("#btn-admin");
+  if (adminBtn) {
+    adminBtn.hidden = CardStore.isArchive() || !isOrganiserHost();
+  }
+  const controls = $("#contribute-controls");
+  if (controls && !CardStore.isArchive()) {
+    controls.hidden = !contributePageIsVisible(index);
+  }
+}
+
 const book = new Book(bookEl, {
-  onChange(index, total) {
-    indicatorEl.textContent = `Page ${index + 1} of ${total}`;
-    const atStart = index === 0;
-    const atEnd = index === total - 1;
-    btnPrev.disabled = atStart;
-    edgePrev.disabled = atStart;
-    btnNext.disabled = atEnd;
-    edgeNext.disabled = atEnd;
+  onChange() {
+    pauseHiddenFeatureVideo();
+    syncChrome();
   },
 });
 
@@ -404,12 +645,17 @@ btnNext.addEventListener("click", () => book.next());
 edgePrev.addEventListener("click", () => book.prev());
 edgeNext.addEventListener("click", () => book.next());
 
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) pauseFeatureVideos();
+});
+window.addEventListener("pagehide", () => pauseFeatureVideos());
+
 let resizeTimer = null;
 window.addEventListener("resize", () => {
   clearTimeout(resizeTimer);
   resizeTimer = setTimeout(() => {
-    const next = computePageSize();
-    if (next.w !== state.pageSize.w || next.h !== state.pageSize.h) render();
+    const next = computePageSize(measureStage().w, measureStage().h);
+    if (next.w !== state.pageSize.w || next.h !== state.pageSize.h || next.canSpread !== book.spreadCapable) render();
   }, 150);
 });
 
@@ -550,9 +796,15 @@ function resetMsgDialog() {
 }
 
 function openMessageDialog() {
-  resetMsgDialog();
+  if (!hasMessageDraft()) resetMsgDialog();
+  else {
+    buildFontGrid();
+    renderLibraryList();
+    showMsgStep(msgState.step);
+    updateLivePreview();
+  }
   msgDialog.showModal();
-  msgName.focus({ preventScroll: true });
+  (msgState.step === 1 ? msgName : msgText).focus({ preventScroll: true });
 }
 
 /* Source choice toggles the library */
@@ -646,7 +898,9 @@ msgForm.addEventListener("submit", async (e) => {
   submitBtn.disabled = true;
   try {
     const message = await CardStore.addText({ name, text, font: msgState.font });
-    state.messages.push(message);
+    state.messages = await CardStore.getAll();
+    resetMsgDialog();
+    resetMsgDialog();
     msgDialog.close();
     render({ focusMessageId: message.id });
     toast("Your message has been added to Tracey’s card.");
@@ -784,6 +1038,12 @@ async function startRecording() {
     stopStream();
     rec.duration = Math.max(1, Math.round((Date.now() - rec.startedAt) / 1000));
     rec.blob = new Blob(rec.chunks, { type: recorder.mimeType || mimeType || "audio/webm" });
+    if (rec.blob.size > MAX_UPLOAD_BYTES) {
+      rec.blob = null;
+      setRecorderUi({ status: "Recording too large" });
+      setError(null, voiceError, "That recording is larger than 5 MB. Delete it and record a shorter message.");
+      return;
+    }
     if (rec.url) URL.revokeObjectURL(rec.url);
     rec.url = URL.createObjectURL(rec.blob);
     recAudio.src = rec.url;
@@ -861,7 +1121,9 @@ voiceForm.addEventListener("submit", async (e) => {
   voiceSubmit.disabled = true;
   try {
     const message = await CardStore.addVoice({ name, blob: rec.blob, duration: rec.duration });
-    state.messages.push(message);
+    state.messages = await CardStore.getAll();
+    resetRecorder();
+    voiceForm.reset();
     voiceDialog.close();
     render({ focusMessageId: message.id });
     toast("Your voice message has been added to Tracey’s card.");
@@ -873,9 +1135,11 @@ voiceForm.addEventListener("submit", async (e) => {
 });
 
 function openVoiceDialog() {
-  voiceForm.reset();
-  setError(voiceName, voiceNameError, "");
-  resetRecorder();
+  if (!hasVoiceDraft()) {
+    voiceForm.reset();
+    setError(voiceName, voiceNameError, "");
+    resetRecorder();
+  }
   const supported = recordingSupported();
   voiceUnsupported.hidden = supported;
   $(".recorder__controls").hidden = !supported;
@@ -885,54 +1149,74 @@ function openVoiceDialog() {
   voiceName.focus({ preventScroll: true });
 }
 
-setupDialogClose(voiceDialog, resetRecorder);
+setupDialogClose(voiceDialog);
 $("#btn-add-voice").addEventListener("click", openVoiceDialog);
 
 /* ------------------------------------------------------------------------ */
-/* Dialog: admin reset                                                       */
+/* Organiser archive (localhost only — this is not authentication)            */
 /* ------------------------------------------------------------------------ */
 
 const adminDialog = $("#dialog-admin");
-const adminForm = $("#form-admin");
-const adminConfirm = $("#admin-confirm");
-const adminReset = $("#admin-reset");
+const adminExport = $("#admin-export");
 
-adminConfirm.addEventListener("input", () => {
-  adminReset.disabled = adminConfirm.value.trim().toUpperCase() !== "RESET";
-});
-adminForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-  if (adminConfirm.value.trim().toUpperCase() !== "RESET") return;
-  await CardStore.clear();
-  state.messages = [];
-  adminDialog.close();
-  book.index = 0;
-  render();
-  toast("The card has been reset.");
-});
-setupDialogClose(adminDialog, () => {
-  adminForm.reset();
-  adminReset.disabled = true;
-});
-$("#btn-admin").addEventListener("click", () => {
-  adminForm.reset();
-  adminReset.disabled = true;
-  adminDialog.showModal();
-});
+if (adminExport) {
+  adminExport.addEventListener("click", async () => {
+    if (!isOrganiserHost() || CardStore.isArchive()) return;
+    adminExport.disabled = true;
+    try {
+      const result = await LC.archive.exportCard();
+      toast(`Archive downloaded (${result.count} message${result.count === 1 ? "" : "s"}).`);
+    } catch (err) {
+      console.error(err);
+      toast(err.message || "The archive could not be created.", { type: "error" });
+    } finally {
+      adminExport.disabled = false;
+    }
+  });
+}
+if (adminDialog) {
+  setupDialogClose(adminDialog);
+}
+const adminBtn = $("#btn-admin");
+if (adminBtn) {
+  adminBtn.addEventListener("click", () => {
+    if (!isOrganiserHost() || CardStore.isArchive()) return;
+    adminDialog.showModal();
+  });
+}
 
 /* ------------------------------------------------------------------------ */
 /* Boot                                                                      */
 /* ------------------------------------------------------------------------ */
 
 async function init() {
-  state.persistent = CardStore.isAvailable();
-  if (!state.persistent) {
-    toast("Local storage isn’t available, so messages will only last until you close this tab.", { type: "error", duration: 7000 });
+  const addBtn = $("#btn-add-message");
+  const voiceBtn = $("#btn-add-voice");
+  const ratioReady = probeFeatureVideoRatio();
+  if (CardStore.isArchive()) {
+    if (addBtn) addBtn.hidden = true;
+    if (voiceBtn) voiceBtn.hidden = true;
+  } else if (!CardStore.isConfigured()) {
+    if (addBtn) addBtn.disabled = true;
+    if (voiceBtn) voiceBtn.disabled = true;
+    toast(
+      "The shared card is not connected yet. Add the Supabase Project URL and anon public key to js/supabase-config.js.",
+      { type: "error", duration: 9000 },
+    );
+    await ratioReady;
+    render();
+    return;
   }
 
-  // First paint with system fonts, then re-layout once handwriting fonts are ready
-  // (font metrics change the measured note sizes).
-  state.messages = await CardStore.getAll();
+  try {
+    const [messages] = await Promise.all([CardStore.getAll(), ratioReady]);
+    state.messages = messages;
+  } catch (err) {
+    await ratioReady;
+    toast(err instanceof StorageError ? err.message : "Could not load the shared card.", { type: "error", duration: 8000 });
+    render();
+    return;
+  }
   render();
   await preloadFonts();
   render();

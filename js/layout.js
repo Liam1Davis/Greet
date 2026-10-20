@@ -11,14 +11,45 @@
 (function (LC) {
 "use strict";
 
+/** A4 portrait: 210 mm × 297 mm. Width ÷ height. */
+const A4_PORTRAIT_RATIO = 210 / 297;
+/** A4 portrait at 96 dpi. Pages scale down from this; they never become landscape. */
+const MAX_PAGE_WIDTH = 794;
+const MAX_PAGE_HEIGHT = 1123;
+
 /** Padding inside the page (keeps notes clear of the edge tap zones). */
 const PAGE_PADDING = 52;
 /** Padding used on small (phone-sized) pages; still wider than the 28px mobile edge zones. */
-const SMALL_PAGE_PADDING = 32;
-/** Minimum gap between note bounding boxes. */
-const GAP = 12;
-/** Reference content width (A4 landscape minus padding); widths scale down on smaller pages. */
-const REFERENCE_AREA_W = 1123 - 2 * PAGE_PADDING;
+const SMALL_PAGE_PADDING = 36;
+/** Minimum gap between note bounding boxes. Compact tiles need a tighter gap. */
+const GAP = 8;
+/** Reference content width (A4 portrait minus padding); widths scale down on smaller pages. */
+const REFERENCE_AREA_W = MAX_PAGE_WIDTH - 2 * PAGE_PADDING;
+
+/**
+ * Fit one A4 portrait page inside the leftover stage. Never stretch or flip
+ * to landscape. `canSpread` is true when two of those pages fit side by side.
+ */
+function computePageSize(availW, availH) {
+  const width = Math.max(120, Number(availW) || 0);
+  const height = Math.max(160, Number(availH) || 0);
+  let w = Math.min(MAX_PAGE_WIDTH, width);
+  let h = w / A4_PORTRAIT_RATIO;
+  if (h > height || h > MAX_PAGE_HEIGHT) {
+    h = Math.min(MAX_PAGE_HEIGHT, height);
+    w = h * A4_PORTRAIT_RATIO;
+  }
+  if (w > width) {
+    w = width;
+    h = w / A4_PORTRAIT_RATIO;
+  }
+  return {
+    w: Math.floor(w),
+    h: Math.floor(h),
+    canSpread: width >= Math.floor(w) * 2 + 8,
+    ratio: A4_PORTRAIT_RATIO,
+  };
+}
 /** Max rotation in degrees (notes are rotated between -ROT and +ROT). */
 const ROT = 4;
 /** Random placement attempts before falling back to a grid scan. */
@@ -64,22 +95,42 @@ function overlaps(a, b) {
   return !(a.x + a.w + GAP <= b.x || b.x + b.w + GAP <= a.x || a.y + a.h + GAP <= b.y || b.y + b.h + GAP <= a.y);
 }
 
+function contentMetrics(pageW, pageH) {
+  const pad = pageW < 640 ? SMALL_PAGE_PADDING : PAGE_PADDING;
+  return {
+    pad,
+    areaW: Math.max(100, pageW - pad * 2),
+    areaH: Math.max(100, pageH - pad * 2),
+  };
+}
+
+function asBoxes(reserved) {
+  if (!reserved) return [];
+  return (Array.isArray(reserved) ? reserved : [reserved]).map((box) => ({
+    x: box.x || 0,
+    y: box.y || 0,
+    w: box.w,
+    h: box.h,
+  }));
+}
+
 /**
  * Pick a natural note width based on message length and the available area.
  */
 function pickNoteWidth(message, areaW, rand) {
-  if (message.type === "voice") return 230;
+  if (message.type === "voice") return Math.min(168, areaW);
   const len = (message.text || "").length;
   let base;
-  if (len < 50) base = 200;
-  else if (len < 110) base = 260;
-  else if (len < 200) base = 320;
-  else base = 380;
+  if (len < 50) base = 148;
+  else if (len < 110) base = 188;
+  else if (len < 200) base = 230;
+  else base = 274;
   // small random variation so columns don't look uniform
-  base += Math.round((rand() - 0.5) * 50);
+  base += Math.round((rand() - 0.5) * 36);
   // On smaller pages, narrow the notes a little so more fit per page.
   const scale = Math.max(0.78, Math.min(1, areaW / REFERENCE_AREA_W));
-  return Math.max(160, Math.min(Math.round(base * scale), areaW));
+  const minW = Math.min(118, areaW);
+  return Math.max(minW, Math.min(Math.round(base * scale), areaW));
 }
 
 function tryPlace(placed, box, areaW, areaH, rand) {
@@ -127,14 +178,17 @@ function tryPlace(placed, box, areaW, areaH, rand) {
  * PlacedNote: { message, left, top, width, height, rotation }
  *   left/top are the top-left of the *unrotated* note element, in page coordinates.
  */
-function layoutMessages(messages, pageW, pageH, measure) {
+function layoutMessages(messages, pageW, pageH, measure, options = {}) {
   // Smaller pages (phones) get a tighter margin so more notes fit per page.
-  const pad = pageW < 640 ? SMALL_PAGE_PADDING : PAGE_PADDING;
-  const areaW = Math.max(100, pageW - pad * 2);
-  const areaH = Math.max(100, pageH - pad * 2);
+  const { pad, areaW, areaH } = contentMetrics(pageW, pageH);
+  const firstPageReserved = asBoxes(
+    typeof options.reserveFirstPage === "function"
+      ? options.reserveFirstPage(areaW, areaH)
+      : options.reserveFirstPage,
+  );
 
   const pages = [[]];
-  let placedBoxes = [];
+  let placedBoxes = firstPageReserved.map((box) => ({ ...box }));
 
   for (const message of messages) {
     const rand = mulberry32(hashString(message.id || message.createdAt || Math.random().toString()));
@@ -170,5 +224,15 @@ function layoutMessages(messages, pageW, pageH, measure) {
   return pages;
 }
 
-LC.layout = { PAGE_PADDING, pickNoteWidth, layoutMessages };
+LC.layout = {
+  A4_PORTRAIT_RATIO,
+  MAX_PAGE_WIDTH,
+  MAX_PAGE_HEIGHT,
+  PAGE_PADDING,
+  SMALL_PAGE_PADDING,
+  pickNoteWidth,
+  layoutMessages,
+  computePageSize,
+  contentMetrics,
+};
 })(window.LeavingCard = window.LeavingCard || {});

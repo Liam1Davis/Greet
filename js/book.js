@@ -22,7 +22,21 @@ class Book {
     this.index = 0;
     this.pages = [];
     this.animating = false;
+    this.spreadCapable = false;
     this._bindInput();
+  }
+
+  setSpreadCapable(enabled) {
+    this.spreadCapable = Boolean(enabled);
+    this._syncSpreadClass();
+  }
+
+  isShowingSpread() {
+    return this.spreadCapable && this.index > 0 && this.index + 1 < this.pages.length;
+  }
+
+  _syncSpreadClass() {
+    this.el.classList.toggle("is-spread", this.isShowingSpread());
   }
 
   /** Replace the page set (after re-render). Keeps the current index if possible. */
@@ -72,6 +86,7 @@ class Book {
 
     this.index = target;
     this._applyState(true);
+    this.onChange(this.index, this.pages.length);
   }
 
   _turnDurationMs() {
@@ -84,14 +99,17 @@ class Book {
   /** Apply turned state + z-indexes for the current index. */
   _applyState(animated) {
     const total = this.pages.length;
+    const spread = this.isShowingSpread();
+    this._syncSpreadClass();
     this.pages.forEach((page, i) => {
       if (!animated) page.style.transition = "none";
       page.classList.toggle("is-turned", i < this.index);
-      // Pages before current: later ones on top. Pages from current onwards: earlier ones on top.
+      page.classList.toggle("is-left", spread && i === this.index);
+      page.classList.toggle("is-right", spread && i > this.index);
       page.style.zIndex = i < this.index ? String(i + 1) : String(total - i + 1);
-      page.setAttribute("aria-hidden", i === this.index ? "false" : "true");
+      const visible = i === this.index || (spread && i === this.index + 1);
+      page.setAttribute("aria-hidden", visible ? "false" : "true");
       if (!animated) {
-        // force reflow then restore transition
         void page.offsetWidth;
         page.style.transition = "";
       }
@@ -125,6 +143,11 @@ class Book {
       "touchstart",
       (e) => {
         if (e.touches.length !== 1) return;
+        if (document.querySelector("dialog[open]")) return;
+        const target = e.target && e.target.closest
+          ? e.target.closest("button, a, video, audio, input, textarea, select, .feature-video, .voice-note, .contribute-controls")
+          : null;
+        if (target) return;
         tracking = true;
         startX = e.touches[0].clientX;
         startY = e.touches[0].clientY;

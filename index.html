@@ -2,7 +2,7 @@
 <html lang="en-GB">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Tracey’s Leaving Card</title>
   <meta name="description" content="An interactive digital leaving card for Tracey. Add a handwritten-style note or record a voice message." />
 
@@ -25,22 +25,7 @@
       <span class="app-header__eyebrow">A digital leaving card</span>
       <h1 class="app-header__name">For Tracey</h1>
     </div>
-    <div class="app-header__actions">
-      <button type="button" class="btn btn--primary" id="btn-add-message">
-        <span aria-hidden="true">✎</span> Add your message
-      </button>
-      <button type="button" class="btn btn--secondary" id="btn-add-voice">
-        <span aria-hidden="true">🎙</span> Record a voice message
-      </button>
-    </div>
   </header>
-
-  <!-- Brief on-screen instructions -->
-  <p class="instructions" id="instructions">
-    Turn the pages with the arrows, your keyboard’s arrow keys, or by swiping.
-    Use <strong>Add your message</strong> to write a note in your own handwriting style,
-    or <strong>Record a voice message</strong> to leave Tracey a spoken farewell.
-  </p>
 
   <!-- ============================================================
        The card (book)
@@ -214,6 +199,7 @@
         </div>
         <audio id="rec-audio" preload="auto" hidden></audio>
         <p class="field__error" id="voice-error" role="alert"></p>
+        <p class="dialog__hint">Recordings can last up to 3 minutes and must be 5 MB or smaller. Listen back before adding the note to the card.</p>
         <p class="recorder__unsupported" id="voice-unsupported" hidden>
           Sorry, your browser doesn’t support audio recording. Please try a recent version of Chrome, Edge, Firefox or Safari,
           or add a written message instead.
@@ -227,26 +213,40 @@
     </form>
   </dialog>
 
-  <!-- ============================================================
-       Dialog: admin / reset
-       ============================================================ -->
+  <!-- Page 2 contribution controls. Parked here between renders, then moved onto the A4 page. -->
+  <div id="contribute-dock" hidden>
+    <div id="contribute-controls" class="contribute-controls">
+      <button type="button" class="btn btn--primary" id="btn-add-message">
+        <span aria-hidden="true">✎</span> Add your message
+      </button>
+      <button type="button" class="btn btn--secondary" id="btn-add-voice">
+        <span aria-hidden="true">🎙</span> Record a voice message
+      </button>
+    </div>
+  </div>
+
+  <!-- Organiser archive export. Shown only on localhost; this is not a login. -->
   <dialog class="dialog dialog--small" id="dialog-admin" aria-labelledby="dialog-admin-title">
     <form method="dialog" class="dialog__form" id="form-admin" novalidate>
       <header class="dialog__header">
-        <h2 class="dialog__title" id="dialog-admin-title">Admin: reset card</h2>
+        <h2 class="dialog__title" id="dialog-admin-title">Export archive</h2>
         <button type="button" class="dialog__close" data-close aria-label="Close">×</button>
       </header>
       <p class="dialog__hint">
-        This permanently removes <strong>all</strong> written and voice messages stored on this device.
-        Type <strong>RESET</strong> below to confirm.
+        This control is shown only when you open the site on this computer
+        (<code>localhost</code>). That hides it from the public website; it is not a password
+        and not backend authentication.
       </p>
-      <div class="field">
-        <label for="admin-confirm">Confirmation</label>
-        <input type="text" id="admin-confirm" autocomplete="off" placeholder="RESET" />
-      </div>
+      <p class="dialog__hint">
+        <strong>Export archive</strong> downloads a ZIP of the complete card, every message, images, fonts, and original
+        voice files. Unzip it and open <code>index.html</code> — no internet and no local server required.
+      </p>
+      <p class="dialog__hint">
+        The website cannot wipe the shared card. Delete messages in the Supabase dashboard if you need to.
+      </p>
       <footer class="dialog__actions">
         <button type="button" class="btn btn--ghost" data-close>Cancel</button>
-        <button type="submit" class="btn btn--danger" id="admin-reset" disabled>Reset card</button>
+        <button type="button" class="btn btn--primary" id="admin-export">Export archive</button>
       </footer>
     </form>
   </dialog>
@@ -254,12 +254,15 @@
   <!-- Toast notifications -->
   <div class="toast-region" id="toast-region" aria-live="polite" aria-atomic="true"></div>
 
-  <!-- Scripts (classic scripts so the card works from file:// too; order matters) -->
+  <!-- Scripts (classic scripts; order matters). Supabase is loaded from a CDN for the live site only. -->
+  <script defer src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+  <script defer src="js/supabase-config.js"></script>
   <script defer src="js/fonts.js"></script>
   <script defer src="js/messages-library.js"></script>
   <script defer src="js/storage.js"></script>
   <script defer src="js/layout.js"></script>
   <script defer src="js/book.js"></script>
+  <script defer src="js/archive.js"></script>
   <script defer src="js/app.js"></script>
 </body>
 </html>

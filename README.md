@@ -1,94 +1,138 @@
 # Tracey’s Leaving Card
 
-An interactive digital A4 leaving card. Colleagues can add handwritten-style notes (in one of six handwriting fonts) or record a voice message. Pages turn like a book, the number of message pages grows automatically, and everything is saved on the device so it survives a refresh.
+An interactive digital **A4 portrait** leaving card. Colleagues add handwritten-style notes or voice messages. Pages turn like a book. **Submitted messages are stored in a shared Supabase project** so every device sees the same card.
 
-Built with plain **HTML, CSS and vanilla JavaScript**. No build step or dependencies.
+Built with plain **HTML, CSS and vanilla JavaScript**. No build step.
 
-## Running locally
+Do **not** invite contributors until you have completed the dashboard steps below and passed the two-device test.
 
-**Simplest:** double-click `index.html` to open it in Chrome, Edge, Firefox or Safari. The scripts are plain (non-module) scripts, so the card works directly from disk.
+## Access model
 
-**Recommended for sharing on a network:** serve the folder with any static server, for example:
+This card has **no contributor logins**. The browser uses the public anon/publishable key.
+
+| Action | Who |
+| --- | --- |
+| Read all messages | Anyone with the website (and therefore the anon key) |
+| Add a written or voice message | Anyone with the website |
+| Change or delete someone else’s message | Nobody via the website |
+| Play a voice message | Anyone with the website, via a short-lived signed URL |
+| Wipe the card | **Not available on the website.** Use the Supabase dashboard |
+| Export an offline archive | Shown only when you open the site on `localhost` on your computer |
+
+A private Storage bucket plus signed URLs is **not** the same as authenticating visitors. An unlisted Netlify address is **not** access control. Anyone who has the website can read messages and request playback URLs.
+
+The Admin / Export control is hidden on the public site and shown only on `localhost`. That is a convenience so colleagues do not see it. It is **not** a password and **not** backend authentication. Anyone who can run the project locally with the same configuration could export.
+
+Never put the **service_role** key, other secret keys, or the database password in any frontend file or GitHub.
+
+## Where to put the project URL and anon key
+
+There is **no build step**. Netlify environment variables are **not** injected into this JavaScript.
+
+1. Open [js/supabase-config.js](js/supabase-config.js).
+2. In the Supabase dashboard go to **Project Settings → API**.
+3. Paste **Project URL** into `url`.
+4. Paste **anon public** (publishable) into `anonKey`.
+5. Deploy or refresh the site.
+
+Leave the placeholders (`YOUR-PROJECT`, `YOUR-PUBLISHABLE-ANON-KEY`) and the app will refuse to save or load shared messages. It will not fall back to browser storage.
+
+## What you must still do in the Supabase dashboard
+
+1. Open your Supabase project.
+2. **SQL Editor** → New query.
+3. Run all of [supabase/setup.sql](supabase/setup.sql).  
+   It is safe to re-run. If `public.messages` already exists with dashboard names (`audio_key`, `contributor_name`, and so on), those columns are renamed to the names the app uses. Rows are not deleted.
+4. Confirm **Storage → Buckets** shows `voice-messages` as **private**, 5 MB limit.
+5. Confirm **Table Editor → messages** shows `audio_path` (not `audio_key`) plus `type`, `name`, `text`, `font`, `duration`, and `mime_type`.
+6. Redeploy on Netlify (`main`, empty base, empty build, publish `.`) or refresh a local server.
+
+**Enabling RLS without the policies in `setup.sql` would hide every row from the API.**
+
+### If a voice upload is not saved as a message
+
+The website cannot delete Storage objects. If a recording uploads and the database row is not created:
+
+1. Open **Table Editor → messages** and note the `audio_path` values that exist.
+2. Open **Storage → voice-messages**.
+3. Delete only files whose names do **not** appear as an `audio_path`.
+
+Do not delete a file that is referenced by a submitted message.
+
+## Two-device acceptance test
+
+Do this before inviting colleagues:
+
+1. Submit a written message from your computer.
+2. Open the same website on your phone and confirm that message appears.
+3. Record a voice message on one device (name → Record → Stop → Play → Add to card) and play it on the other.
+4. Refresh both devices and confirm both submissions remain.
+
+If a save fails, the site must show an error and must **not** say the message was added.
+
+## Using the live card
+
+- **Page 1** is the cover. Use **Turn the page to leave your message →**.
+- **Page 2** is the only place to add a written or voice message. Editors open as dialogs so they do not stretch the A4 page.
+- Further pages show submitted notes. Voice **playback** stays on those notes.
+- The final page is always last.
+- Each page is A4 portrait (210 × 297 proportions). On a wide desktop, two portrait pages may sit side by side. On a phone, one portrait page is shown.
+- **Export archive** (localhost only): downloads a ZIP. Unzip and open `index.html` from disk — no internet and no local server. Messages are embedded in `js/archive-data.js`. The archive CTA reads **Open your card →**.
+
+## Netlify
+
+| Field | Value |
+| --- | --- |
+| Branch | `main` |
+| Base directory | empty |
+| Build command | empty |
+| Publish directory | `.` |
+
+## Local preview and archive export
 
 ```powershell
-# Python 3
 python -m http.server 8080
-
-# or Node (no install needed)
-npx serve .
 ```
 
-Then open <http://localhost:8080>.
-
-Notes:
-
-- Microphone recording requires a secure context. `localhost` and `file://` both count as secure in modern browsers; if you host the card on another machine, use HTTPS.
-- Fonts are loaded from Google Fonts, so an internet connection is needed for the handwriting styles. For offline use, download the six handwriting fonts plus Playfair Display / Cormorant Garamond and replace the `<link>` in `index.html` with `@font-face` rules.
-- Messages are stored per browser, per device. For a shared card where everyone contributes from their own machine, host it and swap the storage adapter for a backend (see below).
-
-## Using the card
-
-- **Turn pages** with the arrow buttons, your keyboard’s ← / → keys, by clicking/tapping the page edges, or by swiping on touch devices.
-- **Add your message**: enter your name, write your own note or pick one from the message library (Good Luck / Farewell & Good Luck / Funny Congratulations), choose a handwriting style, preview, review and submit.
-- **Record a voice message**: enter your name, record, listen back, re-record if you like, then add it. Voice notes appear on the card with a play/pause control.
-- **Admin → Reset card** (bottom of the page) clears every message on this device. It requires typing `RESET` to confirm.
-
-## Replacing the placeholders
-
-| Placeholder | File | Notes |
-| --- | --- | --- |
-| Photo of Tracey | `assets/tracey.jpg` | The cover loads this file; if it's missing, `assets/tracey-placeholder.svg` is shown with a "Photo of Tracey" label. Swap the JPG to change the photo (the crop position is set by `object-position` on `.cover-photo__img`). |
-| Flower bouquet | `assets/bouquet.svg` | Replace with any image; keep roughly square for best results. |
+Open http://localhost:8080. Shared messages still require a configured Supabase project. The Admin / Export control appears only on localhost.
 
 ## Project structure
 
 ```
-index.html              Markup: header, book stage, dialogs
-css/styles.css          All styling, page-turn animation, responsive rules
-js/app.js               UI wiring: rendering, dialogs, recorder, boot
-js/book.js              Page stacking + 3D page-turn, keyboard & swipe input
-js/layout.js            Scatter/pagination engine (seeded, non-overlapping)
-js/fonts.js             The six handwriting fonts + preloading
-js/messages-library.js  Predefined message library (3 categories)
-js/storage.js           Storage adapter (localStorage + IndexedDB)
-assets/                 Placeholder SVGs
+index.html
+css/styles.css
+js/supabase-config.js   ← paste Project URL + anon key here
+js/storage.js           ← Supabase (or offline archive); no browser fallback
+js/archive.js           ← ZIP export
+js/app.js
+js/book.js
+js/layout.js
+js/fonts.js
+js/messages-library.js
+supabase/setup.sql
+supabase/migrate-remove-unsafe-rpcs.sql
+assets/bouquet.svg      ← original watercolour-style botanical SVG
+assets/
 ```
 
-## How layout & pagination work
+## Completed in code vs still yours
 
-`js/layout.js` measures each note offscreen at a width chosen from its length, rotates it between −4° and +4°, then finds a free spot on the current page using seeded random attempts followed by a systematic scan. If nothing fits, a new page is started. Because the random seed is derived from each message’s id, the layout is stable across refreshes, and because the page size is derived from the viewport, pagination adapts on resize.
+**Done in this repository**
 
-## Swapping local storage for a backend
+- Every page is A4 portrait (210÷297). Desktop may show two portrait pages; phones show one.
+- Cover wording, Page 2 contribution only, revised final message, new floral SVG.
+- Website reset and public wipe/orphan-delete RPCs removed.
+- Shared Supabase storage preserved (Postgres + private voice bucket). No localStorage fallback.
+- Offline ZIP export updated; no Supabase scripts or config file in the archive.
+- Admin / Export is shown only on localhost.
 
-All persistence goes through `CardStore` in `js/storage.js`, and every method is `async`. To move to a database/API, implement the same interface against your backend and nothing in the UI needs to change:
+**You still need to do**
 
-```js
-export const CardStore = {
-  isAvailable(): boolean,
-  async getAll(): Promise<Message[]>,                              // oldest first
-  async addText({ name, text, font }): Promise<Message>,
-  async addVoice({ name, blob, duration }): Promise<Message>,       // upload the Blob
-  async getAudioUrl(message): Promise<string | null>,              // playable URL
-  async remove(id): Promise<void>,
-  async clear(): Promise<void>,
-};
-```
+- Run `supabase/setup.sql` and, if the earlier script was already applied, `supabase/migrate-remove-unsafe-rpcs.sql`.
+- Keep your Project URL and anon key in `js/supabase-config.js` (do not replace real values with placeholders).
+- Deploy the updated files.
+- Pass the two-device test.
+- Open the site on localhost to export an archive, then open that ZIP from disk.
 
-Message shape:
+This update has **not** been tested against your live Supabase project from this environment. Do not share the card for collecting messages until the two-device test passes.
 
-```ts
-{
-  id: string;
-  type: "text" | "voice";
-  name: string;
-  text?: string;       // text messages
-  font?: string;       // one of the ids in js/fonts.js
-  duration?: number;   // seconds, voice messages
-  mimeType?: string;   // voice messages
-  createdAt: string;   // ISO timestamp
-}
-```
-
-## Browser support
-
-Modern evergreen browsers. Voice recording depends on `MediaRecorder`; a friendly fallback message is shown where it is unavailable. The app degrades gracefully if `localStorage` or `IndexedDB` is blocked (messages then last for the session only, and audio falls back to Base64 in `localStorage`).

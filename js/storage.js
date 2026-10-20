@@ -1,37 +1,21 @@
 /**
- * Storage adapter for the card.
+ * Shared card storage.
  *
- * All methods are async and return plain objects, so this module can later be
- * swapped for a backend/API implementation (e.g. fetch('/api/messages')) without
- * touching the UI code. See README for the suggested interface.
+ * Live site: Supabase Postgres + private Storage bucket.
+ * Offline archive ZIP: window.LEAVING_CARD_ARCHIVE (embedded; read-only).
  *
- * Current implementation:
- *   - Message metadata (name, text, font, timestamps) → localStorage (JSON)
- *   - Voice recordings → IndexedDB as Blobs (falls back to Base64 data URLs in
- *     localStorage if IndexedDB is unavailable)
- *
- * Message shape:
- *   {
- *     id: string,            // unique id
- *     type: 'text' | 'voice',
- *     name: string,          // contributor name
- *     text?: string,         // for text messages
- *     font?: string,         // font id (see fonts.js)
- *     duration?: number,     // seconds, for voice messages
- *     mimeType?: string,     // for voice messages
- *     audioData?: string,    // data URL fallback when IndexedDB is unavailable
- *     createdAt: string      // ISO timestamp
- *   }
+ * There is no localStorage / IndexedDB fallback. A failed save is reported
+ * as a failure.
  *
  * Exposed on window.LeavingCard.storage = { CardStore, StorageError, uid }.
  */
 (function (LC) {
 "use strict";
 
-const LS_KEY = "tracey-leaving-card:messages:v1";
-const DB_NAME = "tracey-leaving-card";
-const DB_VERSION = 1;
-const AUDIO_STORE = "audio";
+const BUCKET = "voice-messages";
+const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+const SIGNED_URL_SECONDS = 120;
+const ALLOWED_FONTS = ["caveat", "dancing", "greatvibes", "patrick", "indie", "homemade"];
 
 class StorageError extends Error {
   constructor(message, cause) {
@@ -41,220 +25,226 @@ class StorageError extends Error {
   }
 }
 
-/** Generate a reasonably unique id without external dependencies. */
 function uid() {
   if (globalThis.crypto?.randomUUID) return crypto.randomUUID();
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
-/* ------------------------------------------------------------------------ */
-/* IndexedDB helpers                                                         */
-/* ------------------------------------------------------------------------ */
+function archivePayload() {
+  return window.LEAVING_CARD_ARCHIVE && Array.isArray(window.LEAVING_CARD_ARCHIVE.messages)
+    ? window.LEAVING_CARD_ARCHIVE
+    : null;
+}
 
-let dbPromise = null;
+function isPlaceholder(value, needle) {
+  return !value || String(value).includes(needle);
+}
 
-function openDb() {
-  if (dbPromise) return dbPromise;
-  if (!("indexedDB" in globalThis)) {
-    dbPromise = Promise.resolve(null);
-    return dbPromise;
+function readConfig() {
+  const cfg = window.LEAVING_CARD_SUPABASE || {};
+  const url = String(cfg.url || "").trim();
+  const anonKey = String(cfg.anonKey || "").trim();
+  if (isPlaceholder(url, "YOUR-PROJECT") || isPlaceholder(anonKey, "YOUR-PUBLISHABLE")) {
+    return null;
   }
-  dbPromise = new Promise((resolve) => {
-    try {
-      const req = indexedDB.open(DB_NAME, DB_VERSION);
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains(AUDIO_STORE)) {
-          db.createObjectStore(AUDIO_STORE);
-        }
-      };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => resolve(null);
-      req.onblocked = () => resolve(null);
-    } catch {
-      resolve(null);
-    }
-  });
-  return dbPromise;
+  return { url, anonKey };
 }
 
-function idbRequest(storeName, mode, fn) {
-  return openDb().then(
-    (db) =>
-      new Promise((resolve, reject) => {
-        if (!db) return reject(new StorageError("IndexedDB unavailable"));
-        const tx = db.transaction(storeName, mode);
-        const store = tx.objectStore(storeName);
-        const req = fn(store);
-        tx.oncomplete = () => resolve(req?.result);
-        tx.onerror = () => reject(new StorageError("IndexedDB transaction failed", tx.error));
-        tx.onabort = () => reject(new StorageError("IndexedDB transaction aborted", tx.error));
-      }),
-  );
+function isConfigured() {
+  return Boolean(archivePayload() || readConfig());
 }
 
-function blobToDataUrl(blob) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result));
-    reader.onerror = () => reject(new StorageError("Could not encode audio"));
-    reader.readAsDataURL(blob);
-  });
-}
-
-/* ------------------------------------------------------------------------ */
-/* localStorage helpers                                                      */
-/* ------------------------------------------------------------------------ */
-
-function readAll() {
-  try {
-    const raw = localStorage.getItem(LS_KEY);
-    if (!raw) return [];
-    const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return [];
+let client = null;
+function getClient() {
+  if (archivePayload()) {
+    throw new StorageError("This offline archive is read-only.");
   }
-}
-
-function writeAll(messages) {
-  try {
-    localStorage.setItem(LS_KEY, JSON.stringify(messages));
-  } catch (err) {
-    const quota =
-      err && (err.name === "QuotaExceededError" || err.name === "NS_ERROR_DOM_QUOTA_REACHED" || err.code === 22);
+  const cfg = readConfig();
+  if (!cfg) {
     throw new StorageError(
-      quota
-        ? "This device’s storage is full. Try deleting a voice message or using a shorter recording."
-        : "Could not save to this device’s storage.",
-      err,
+      "Supabase is not configured. Add the Project URL and anon public key to js/supabase-config.js.",
     );
   }
+  if (!window.supabase || typeof window.supabase.createClient !== "function") {
+    throw new StorageError("The Supabase library failed to load. Check your network connection and refresh.");
+  }
+  if (!client) client = window.supabase.createClient(cfg.url, cfg.anonKey);
+  return client;
 }
 
-/* ------------------------------------------------------------------------ */
-/* Public API                                                                */
-/* ------------------------------------------------------------------------ */
+function apiMessage(error, fallback) {
+  const detail = error && (error.message || error.error_description || error.details);
+  return detail ? `${fallback} (${detail})` : fallback;
+}
+
+function rowToMessage(row) {
+  if (!row) return null;
+  return {
+    id: row.id,
+    type: row.type,
+    name: row.name,
+    text: row.text || undefined,
+    font: row.font || undefined,
+    duration: row.duration == null ? undefined : Number(row.duration),
+    mimeType: row.mime_type || undefined,
+    audioPath: row.audio_path || undefined,
+    audioFile: row.audioFile || undefined,
+    createdAt: row.created_at || row.createdAt,
+  };
+}
+
+function extForMime(mime) {
+  const type = String(mime || "").toLowerCase();
+  if (type.includes("mp4")) return "m4a";
+  if (type.includes("ogg")) return "ogg";
+  if (type.includes("mpeg") || type.includes("mp3")) return "mp3";
+  if (type.includes("wav")) return "wav";
+  return "webm";
+}
 
 const CardStore = {
-  /** True when localStorage is usable. */
+  isArchive() {
+    return Boolean(archivePayload());
+  },
+
+  isConfigured,
+
   isAvailable() {
-    try {
-      const k = "__probe__";
-      localStorage.setItem(k, "1");
-      localStorage.removeItem(k);
-      return true;
-    } catch {
-      return false;
-    }
+    return isConfigured();
   },
 
-  /** @returns {Promise<Array>} all messages, oldest first */
   async getAll() {
-    return readAll().sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+    const archive = archivePayload();
+    if (archive) {
+      return archive.messages.map(rowToMessage).filter(Boolean).sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
+    }
+    const { data, error } = await getClient()
+      .from("messages")
+      .select("id, type, name, text, font, duration, mime_type, audio_path, created_at")
+      .order("created_at", { ascending: true });
+    if (error) {
+      throw new StorageError(apiMessage(error, "Could not load messages from the shared card."), error);
+    }
+    return (data || []).map(rowToMessage);
   },
 
-  /**
-   * Add a written message.
-   * @param {{name:string, text:string, font:string}} data
-   */
   async addText({ name, text, font }) {
-    const message = {
-      id: uid(),
-      type: "text",
-      name: name.trim(),
-      text: text.trim(),
-      font,
-      createdAt: new Date().toISOString(),
-    };
-    const all = readAll();
-    all.push(message);
-    writeAll(all);
-    return message;
+    if (archivePayload()) {
+      throw new StorageError("This offline archive cannot accept new messages.");
+    }
+    const trimmedName = String(name || "").trim();
+    const trimmedText = String(text || "").trim();
+    if (!trimmedName || !trimmedText) {
+      throw new StorageError("Name and message are required.");
+    }
+    if (!ALLOWED_FONTS.includes(font)) {
+      throw new StorageError("Please choose one of the six handwriting styles.");
+    }
+    const { data, error } = await getClient()
+      .from("messages")
+      .insert({
+        type: "text",
+        name: trimmedName,
+        text: trimmedText,
+        font,
+      })
+      .select("id, type, name, text, font, duration, mime_type, audio_path, created_at")
+      .single();
+    if (error || !data) {
+      throw new StorageError(apiMessage(error, "Your message was not saved to the shared card."), error);
+    }
+    return rowToMessage(data);
   },
 
-  /**
-   * Add a voice message. Stores the Blob in IndexedDB where possible.
-   * @param {{name:string, blob:Blob, duration:number}} data
-   */
   async addVoice({ name, blob, duration }) {
+    if (archivePayload()) {
+      throw new StorageError("This offline archive cannot accept new messages.");
+    }
+    const trimmedName = String(name || "").trim();
+    if (!trimmedName) throw new StorageError("Please enter your name before recording.");
+    if (!blob || !blob.size) throw new StorageError("Record a message first, then add it to the card.");
+    if (blob.size > MAX_UPLOAD_BYTES) {
+      throw new StorageError("That recording is larger than 5 MB. Please record a shorter message.");
+    }
+    const seconds = Math.round(duration || 0);
+    if (seconds < 1 || seconds > 180) {
+      throw new StorageError("Voice messages must be between 1 second and 3 minutes.");
+    }
+
     const id = uid();
-    const message = {
-      id,
-      type: "voice",
-      name: name.trim(),
-      duration: Math.round(duration || 0),
-      mimeType: blob.type || "audio/webm",
-      createdAt: new Date().toISOString(),
-    };
+    const mimeType = blob.type || "audio/webm";
+    const audioPath = `${id}.${extForMime(mimeType)}`;
+    const db = getClient();
 
-    let storedInIdb = false;
-    try {
-      await idbRequest(AUDIO_STORE, "readwrite", (store) => store.put(blob, id));
-      storedInIdb = true;
-    } catch {
-      storedInIdb = false;
+    const uploaded = await db.storage.from(BUCKET).upload(audioPath, blob, {
+      contentType: mimeType,
+      upsert: false,
+    });
+    if (uploaded.error) {
+      throw new StorageError(apiMessage(uploaded.error, "The recording could not be uploaded."), uploaded.error);
     }
 
-    if (!storedInIdb) {
-      // Fallback: inline as a data URL (subject to localStorage quota).
-      message.audioData = await blobToDataUrl(blob);
-    }
+    const inserted = await db
+      .from("messages")
+      .insert({
+        id,
+        type: "voice",
+        name: trimmedName,
+        text: null,
+        font: null,
+        duration: seconds,
+        mime_type: mimeType,
+        audio_path: audioPath,
+      })
+      .select("id, type, name, text, font, duration, mime_type, audio_path, created_at")
+      .single();
 
-    const all = readAll();
-    all.push(message);
-    try {
-      writeAll(all);
-    } catch (err) {
-      // Roll back the audio blob if metadata could not be saved.
-      if (storedInIdb) {
-        idbRequest(AUDIO_STORE, "readwrite", (store) => store.delete(id)).catch(() => {});
-      }
-      throw err;
+    if (inserted.error || !inserted.data) {
+      throw new StorageError(
+        apiMessage(
+          inserted.error,
+          "The recording uploaded but was not added to the card. It is not a submitted message. In the Supabase dashboard, open Storage → voice-messages and delete any file that has no matching row in the messages table.",
+        ),
+        inserted.error,
+      );
     }
-    return message;
+    return rowToMessage(inserted.data);
   },
 
-  /**
-   * Resolve a playable URL for a voice message. Caller should revoke object URLs
-   * when finished (handled in app.js).
-   * @returns {Promise<string|null>}
-   */
   async getAudioUrl(message) {
-    if (message.audioData) return message.audioData;
-    try {
-      const blob = await idbRequest(AUDIO_STORE, "readonly", (store) => store.get(message.id));
-      return blob ? URL.createObjectURL(blob) : null;
-    } catch {
-      return null;
+    if (!message) return null;
+    const archive = archivePayload();
+    if (archive) {
+      return message.audioFile || (message.audioPath ? `audio/${message.audioPath}` : null);
     }
+    if (!message.audioPath) return null;
+    const { data, error } = await getClient().storage.from(BUCKET).createSignedUrl(message.audioPath, SIGNED_URL_SECONDS);
+    if (error || !data || !data.signedUrl) {
+      throw new StorageError(apiMessage(error, "This voice message could not be played."), error);
+    }
+    return data.signedUrl;
   },
 
-  /** Remove a single message (and its audio, if any). */
-  async remove(id) {
-    const all = readAll().filter((m) => m.id !== id);
-    writeAll(all);
-    try {
-      await idbRequest(AUDIO_STORE, "readwrite", (store) => store.delete(id));
-    } catch {
-      /* ignore */
+  async getAudioBlob(message) {
+    if (!message || !message.audioPath) return null;
+    const { data, error } = await getClient().storage.from(BUCKET).download(message.audioPath);
+    if (error || !data) {
+      throw new StorageError(apiMessage(error, "Could not download a voice recording for the archive."), error);
     }
+    return data;
   },
 
-  /** Remove everything. */
+  async remove() {
+    throw new StorageError("Individual messages cannot be deleted from the website.");
+  },
+
   async clear() {
-    try {
-      localStorage.removeItem(LS_KEY);
-    } catch {
-      /* ignore */
-    }
-    try {
-      await idbRequest(AUDIO_STORE, "readwrite", (store) => store.clear());
-    } catch {
-      /* ignore */
-    }
+    throw new StorageError("The website cannot wipe the card. Delete messages in the Supabase dashboard if you need to.");
   },
 };
+
+CardStore.MAX_UPLOAD_BYTES = MAX_UPLOAD_BYTES;
+CardStore.BUCKET = BUCKET;
 
 LC.storage = { CardStore, StorageError, uid };
 })(window.LeavingCard = window.LeavingCard || {});

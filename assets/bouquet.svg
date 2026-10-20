@@ -1,123 +1,115 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="85 30 230 365" width="230" height="365" role="img" aria-label="A bouquet of flowers">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 420" width="320" height="420" role="img" aria-labelledby="bouquetTitle bouquetDesc">
+  <title id="bouquetTitle">Watercolour bouquet</title>
+  <desc id="bouquetDesc">A watercolour-style bouquet of blush roses, ivory blooms, muted lilac flowers and soft green foliage, painted without a rectangular background.</desc>
   <defs>
-    <radialGradient id="rose" cx="40%" cy="35%" r="70%">
-      <stop offset="0" stop-color="#f6d3cd"/>
-      <stop offset="1" stop-color="#d9a7a0"/>
+    <radialGradient id="washBlush" cx="38%" cy="32%" r="72%">
+      <stop offset="0" stop-color="#f7d4cc" stop-opacity="0.95"/>
+      <stop offset="0.55" stop-color="#e4b0ab" stop-opacity="0.78"/>
+      <stop offset="1" stop-color="#c98b88" stop-opacity="0.18"/>
     </radialGradient>
-    <radialGradient id="roseDeep" cx="40%" cy="35%" r="70%">
-      <stop offset="0" stop-color="#e8b4ad"/>
-      <stop offset="1" stop-color="#c48b84"/>
+    <radialGradient id="washIvory" cx="42%" cy="30%" r="70%">
+      <stop offset="0" stop-color="#fff8ee" stop-opacity="0.96"/>
+      <stop offset="0.6" stop-color="#f0e2c4" stop-opacity="0.7"/>
+      <stop offset="1" stop-color="#e2cf9f" stop-opacity="0.12"/>
     </radialGradient>
-    <radialGradient id="cream" cx="40%" cy="35%" r="70%">
-      <stop offset="0" stop-color="#fff9ec"/>
-      <stop offset="1" stop-color="#efdfb6"/>
+    <radialGradient id="washLilac" cx="40%" cy="34%" r="68%">
+      <stop offset="0" stop-color="#efe4f2" stop-opacity="0.95"/>
+      <stop offset="0.55" stop-color="#cbb4d4" stop-opacity="0.72"/>
+      <stop offset="1" stop-color="#a88bb3" stop-opacity="0.16"/>
     </radialGradient>
-    <radialGradient id="blue" cx="40%" cy="35%" r="70%">
-      <stop offset="0" stop-color="#e2eef2"/>
-      <stop offset="1" stop-color="#9fb9c7"/>
+    <radialGradient id="washLeaf" cx="35%" cy="30%" r="75%">
+      <stop offset="0" stop-color="#d5e4d4" stop-opacity="0.9"/>
+      <stop offset="0.55" stop-color="#9fb89f" stop-opacity="0.75"/>
+      <stop offset="1" stop-color="#6f8d74" stop-opacity="0.2"/>
     </radialGradient>
-    <linearGradient id="leaf" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#b3c9b7"/>
-      <stop offset="1" stop-color="#7e9b84"/>
+    <linearGradient id="stemSoft" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#8aa388"/>
+      <stop offset="1" stop-color="#5f7462"/>
     </linearGradient>
-    <linearGradient id="ribbon" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#e2cc93"/>
-      <stop offset="0.5" stop-color="#c9a961"/>
-      <stop offset="1" stop-color="#a98a44"/>
+    <linearGradient id="ribbonSoft" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f3d7d1"/>
+      <stop offset="0.5" stop-color="#e8b8b2"/>
+      <stop offset="1" stop-color="#c98b88"/>
     </linearGradient>
-    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#fbf7ee"/>
-      <stop offset="1" stop-color="#eadfca"/>
-    </linearGradient>
+    <filter id="paperGrain" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="2" seed="7" result="n"/>
+      <feColorMatrix type="saturate" values="0" in="n" result="g"/>
+      <feBlend in="SourceGraphic" in2="g" mode="multiply"/>
+    </filter>
   </defs>
 
-  <!-- wrapping paper (behind) -->
-  <path d="M110 180 L200 390 L290 180 L255 150 L200 165 L145 150 Z" fill="url(#paper)" stroke="#d7c7a4" stroke-width="1.5"/>
-
-  <!-- stems -->
-  <g stroke="#7e9b84" stroke-width="3" stroke-linecap="round" fill="none">
-    <path d="M200 330 C 190 280, 160 230, 130 190"/>
-    <path d="M200 330 C 205 280, 215 230, 250 185"/>
-    <path d="M200 330 C 198 280, 190 230, 200 180"/>
-    <path d="M200 330 C 192 290, 165 260, 150 225"/>
-    <path d="M200 330 C 210 290, 240 260, 265 230"/>
+  <!-- Loose watercolour foliage, no bounding rectangle -->
+  <g fill="url(#washLeaf)" filter="url(#paperGrain)" opacity="0.92">
+    <ellipse cx="86" cy="168" rx="48" ry="22" transform="rotate(-48 86 168)"/>
+    <ellipse cx="68" cy="214" rx="54" ry="20" transform="rotate(-28 68 214)"/>
+    <ellipse cx="238" cy="156" rx="50" ry="21" transform="rotate(42 238 156)"/>
+    <ellipse cx="256" cy="208" rx="52" ry="19" transform="rotate(24 256 208)"/>
+    <ellipse cx="104" cy="268" rx="40" ry="16" transform="rotate(-62 104 268)"/>
+    <ellipse cx="214" cy="274" rx="38" ry="15" transform="rotate(58 214 274)"/>
+    <path d="M118 148 C 92 118, 74 128, 78 154 C 62 148, 58 172, 84 176 C 72 198, 108 204, 118 178 C 136 198, 154 176, 138 160 C 148 142, 132 132, 118 148 Z"/>
+    <path d="M206 142 C 232 114, 250 126, 244 150 C 264 146, 266 172, 238 176 C 250 196, 214 204, 206 176 C 188 194, 172 174, 188 156 C 176 138, 192 128, 206 142 Z"/>
   </g>
 
-  <!-- leaves -->
-  <g fill="url(#leaf)" stroke="#6f8c75" stroke-width="1">
-    <path d="M120 210 q 20 -30, 50 -10 q -25 20, -50 10z"/>
-    <path d="M285 215 q -22 -30, -50 -8 q 25 18, 50 8z"/>
-    <path d="M160 250 q 10 -34, 42 -30 q -14 28, -42 30z"/>
-    <path d="M245 255 q -8 -34, -40 -32 q 12 28, 40 32z"/>
-    <path d="M110 160 q 24 -22, 48 2 q -26 14, -48 -2z"/>
-    <path d="M290 165 q -24 -24, -48 0 q 26 14, 48 0z"/>
-    <path d="M190 120 q 10 -34, 36 -36 q -8 30, -36 36z"/>
-    <path d="M300 120 q -40 10, -42 46 q 34 -8, 42 -46z"/>
-    <path d="M100 125 q 40 10, 42 46 q -34 -8, -42 -46z"/>
+  <g fill="none" stroke="url(#stemSoft)" stroke-width="2.2" stroke-linecap="round" opacity="0.85">
+    <path d="M160 368 C 156 300, 128 250, 96 198"/>
+    <path d="M160 368 C 162 304, 170 246, 198 188"/>
+    <path d="M160 368 C 150 310, 146 268, 138 214"/>
+    <path d="M160 368 C 170 312, 186 258, 214 220"/>
+    <path d="M160 368 C 158 320, 160 280, 160 236"/>
   </g>
 
-  <!-- small blue filler flowers -->
-  <g fill="url(#blue)" stroke="#8aa5b3" stroke-width="0.8">
-    <g transform="translate(118 150)"><circle r="7"/><circle cx="12" cy="-6" r="6"/><circle cx="-4" cy="-12" r="5.5"/><circle cx="10" cy="8" r="5"/></g>
-    <g transform="translate(282 150)"><circle r="7"/><circle cx="-12" cy="-6" r="6"/><circle cx="4" cy="-12" r="5.5"/><circle cx="-10" cy="8" r="5"/></g>
-    <g transform="translate(255 100)"><circle r="6"/><circle cx="9" cy="-7" r="5"/><circle cx="-8" cy="-6" r="5"/></g>
-    <g transform="translate(150 95)"><circle r="6"/><circle cx="-9" cy="-7" r="5"/><circle cx="8" cy="-6" r="5"/></g>
-  </g>
-  <g fill="#c9a961">
-    <circle cx="118" cy="150" r="1.8"/><circle cx="282" cy="150" r="1.8"/><circle cx="255" cy="100" r="1.6"/><circle cx="150" cy="95" r="1.6"/>
+  <!-- Ivory rose, upper left -->
+  <g transform="translate(78 108)" filter="url(#paperGrain)">
+    <ellipse cx="36" cy="40" rx="44" ry="40" fill="url(#washIvory)"/>
+    <path d="M18 46 C 12 22, 36 8, 50 24 C 64 8, 86 26, 72 46 C 86 62, 62 82, 44 70 C 28 84, 8 64, 18 46 Z" fill="#f7ecd4" fill-opacity="0.72"/>
+    <path d="M30 48 C 28 34, 44 28, 50 40 C 58 30, 70 42, 60 52 C 68 62, 50 70, 44 60 C 36 70, 24 58, 30 48 Z" fill="#fffdf7" fill-opacity="0.8"/>
+    <ellipse cx="46" cy="48" rx="8" ry="7" fill="#f0d7b0" fill-opacity="0.7"/>
   </g>
 
-  <!-- cream daisies -->
-  <g stroke="#dcc99a" stroke-width="0.8">
-    <g transform="translate(160 185)" fill="url(#cream)">
-      <ellipse rx="7" ry="16" transform="rotate(0)"/><ellipse rx="7" ry="16" transform="rotate(45)"/>
-      <ellipse rx="7" ry="16" transform="rotate(90)"/><ellipse rx="7" ry="16" transform="rotate(135)"/>
-      <circle r="7" fill="#c9a961" stroke="none"/>
-    </g>
-    <g transform="translate(245 190)" fill="url(#cream)">
-      <ellipse rx="7" ry="16" transform="rotate(22)"/><ellipse rx="7" ry="16" transform="rotate(67)"/>
-      <ellipse rx="7" ry="16" transform="rotate(112)"/><ellipse rx="7" ry="16" transform="rotate(157)"/>
-      <circle r="7" fill="#c9a961" stroke="none"/>
-    </g>
+  <!-- Blush rose, centre -->
+  <g transform="translate(112 86)" filter="url(#paperGrain)">
+    <ellipse cx="48" cy="48" rx="52" ry="48" fill="url(#washBlush)"/>
+    <path d="M22 54 C 16 24, 46 6, 62 28 C 78 8, 108 28, 90 54 C 110 72, 84 100, 60 86 C 40 104, 12 78, 22 54 Z" fill="#f3c4be" fill-opacity="0.55"/>
+    <path d="M36 56 C 34 38, 54 30, 62 46 C 72 34, 88 48, 76 60 C 88 74, 66 86, 58 72 C 48 86, 30 70, 36 56 Z" fill="#fae0dc" fill-opacity="0.75"/>
+    <ellipse cx="58" cy="56" rx="9" ry="8" fill="#d89a94" fill-opacity="0.55"/>
   </g>
 
-  <!-- roses -->
-  <g stroke="#c48b84" stroke-width="0.9" stroke-linejoin="round">
-    <!-- left rose -->
-    <g transform="translate(140 130)">
-      <circle r="34" fill="url(#rose)"/>
-      <path d="M-24 6 c 2 -24, 24 -34, 40 -22 c 14 10, 16 32, -2 42 c -16 10, -36 0, -38 -20z" fill="url(#roseDeep)"/>
-      <path d="M-10 4 c 0 -14, 14 -22, 24 -14 c 8 6, 8 20, -2 26 c -10 6, -22 0, -22 -12z" fill="url(#rose)"/>
-      <path d="M-2 2 c 0 -7, 7 -11, 12 -7 c 4 3, 4 10, -1 13 c -5 3, -11 0, -11 -6z" fill="url(#roseDeep)"/>
-    </g>
-    <!-- right rose -->
-    <g transform="translate(262 128)">
-      <circle r="34" fill="url(#rose)"/>
-      <path d="M24 6 c -2 -24, -24 -34, -40 -22 c -14 10, -16 32, 2 42 c 16 10, 36 0, 38 -20z" fill="url(#roseDeep)"/>
-      <path d="M10 4 c 0 -14, -14 -22, -24 -14 c -8 6, -8 20, 2 26 c 10 6, 22 0, 22 -12z" fill="url(#rose)"/>
-      <path d="M2 2 c 0 -7, -7 -11, -12 -7 c -4 3, -4 10, 1 13 c 5 3, 11 0, 11 -6z" fill="url(#roseDeep)"/>
-    </g>
-    <!-- centre rose (largest) -->
-    <g transform="translate(200 88)">
-      <circle r="44" fill="url(#rose)"/>
-      <path d="M-30 8 c 2 -30, 30 -44, 50 -28 c 18 14, 20 42, -2 54 c -22 12, -46 0, -48 -26z" fill="url(#roseDeep)"/>
-      <path d="M-14 6 c 0 -18, 18 -28, 30 -18 c 10 8, 10 26, -2 33 c -12 7, -28 0, -28 -15z" fill="url(#rose)"/>
-      <path d="M-4 3 c 0 -9, 9 -14, 15 -9 c 5 4, 5 13, -1 17 c -6 4, -14 0, -14 -8z" fill="url(#roseDeep)"/>
-    </g>
-    <!-- lower small rose -->
-    <g transform="translate(200 165)">
-      <circle r="24" fill="url(#rose)"/>
-      <path d="M-16 4 c 2 -16, 16 -24, 28 -16 c 10 8, 10 22, -2 30 c -12 6, -26 0, -26 -14z" fill="url(#roseDeep)"/>
-      <path d="M-4 2 c 0 -8, 8 -12, 13 -8 c 4 3, 4 11, -1 14 c -5 3, -12 0, -12 -6z" fill="url(#rose)"/>
-    </g>
+  <!-- Lilac bloom, upper right -->
+  <g transform="translate(176 112)" filter="url(#paperGrain)">
+    <ellipse cx="40" cy="38" rx="46" ry="42" fill="url(#washLilac)"/>
+    <circle cx="24" cy="34" r="14" fill="#e7d6ec" fill-opacity="0.75"/>
+    <circle cx="42" cy="24" r="13" fill="#f4eef6" fill-opacity="0.8"/>
+    <circle cx="58" cy="36" r="14" fill="#d8c0e0" fill-opacity="0.7"/>
+    <circle cx="44" cy="48" r="12" fill="#cbb0d4" fill-opacity="0.55"/>
+    <circle cx="40" cy="36" r="6" fill="#f7f1d8" fill-opacity="0.85"/>
   </g>
 
-  <!-- ribbon bow -->
-  <g>
-    <path d="M200 300 c -30 -26, -70 -22, -78 2 c -4 16, 12 26, 30 18 c 18 -8, 34 -14, 48 -20z" fill="url(#ribbon)" stroke="#a98a44" stroke-width="1"/>
-    <path d="M200 300 c 30 -26, 70 -22, 78 2 c 4 16, -12 26, -30 18 c -18 -8, -34 -14, -48 -20z" fill="url(#ribbon)" stroke="#a98a44" stroke-width="1"/>
-    <path d="M200 300 c -8 30, -16 56, -34 80 l 16 2 c 14 -26, 20 -50, 24 -82z" fill="url(#ribbon)" stroke="#a98a44" stroke-width="1"/>
-    <path d="M200 300 c 8 30, 16 56, 34 80 l -16 2 c -14 -26, -20 -50, -24 -82z" fill="url(#ribbon)" stroke="#a98a44" stroke-width="1"/>
-    <circle cx="200" cy="300" r="11" fill="#c9a961" stroke="#a98a44" stroke-width="1"/>
+  <!-- Smaller blush, lower left -->
+  <g transform="translate(70 176)" filter="url(#paperGrain)">
+    <ellipse cx="34" cy="32" rx="36" ry="32" fill="url(#washBlush)"/>
+    <path d="M18 34 C 16 18, 34 12, 40 24 C 48 14, 62 24, 52 36 C 60 46, 44 54, 38 44 C 30 54, 14 44, 18 34 Z" fill="#f8ddd8" fill-opacity="0.7"/>
+  </g>
+
+  <!-- Ivory, lower right -->
+  <g transform="translate(188 172)" filter="url(#paperGrain)">
+    <ellipse cx="34" cy="34" rx="38" ry="34" fill="url(#washIvory)"/>
+    <path d="M18 36 C 16 20, 34 12, 42 26 C 50 16, 66 28, 54 40 C 64 50, 46 60, 40 48 C 32 58, 14 48, 18 36 Z" fill="#fffaf0" fill-opacity="0.72"/>
+  </g>
+
+  <!-- Tiny lilac sprigs -->
+  <g fill="#d4c0dc" fill-opacity="0.7">
+    <circle cx="150" cy="78" r="7"/>
+    <circle cx="164" cy="70" r="5.5"/>
+    <circle cx="172" cy="82" r="6"/>
+    <circle cx="112" cy="96" r="5"/>
+    <circle cx="230" cy="128" r="6"/>
+    <circle cx="92" cy="150" r="5"/>
+  </g>
+
+  <!-- Soft blush ribbon, not a box -->
+  <g transform="translate(160 318)" fill="url(#ribbonSoft)">
+    <path d="M-10 -8 C -4 -18, 4 -18, 10 -8 C 4 0, -4 0, -10 -8 Z" opacity="0.95"/>
+    <path d="M-6 0 C -40 18, -48 42, -28 58 C -18 36, -8 20, 0 8 Z" opacity="0.8"/>
+    <path d="M6 0 C 40 18, 48 42, 28 58 C 18 36, 8 20, 0 8 Z" opacity="0.8"/>
   </g>
 </svg>
