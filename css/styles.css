@@ -283,6 +283,8 @@ textarea:focus-visible,
   color: var(--ink-soft);
   opacity: 0.6;
   font-size: 12px;
+  min-height: 32px;
+  padding: 6px 8px;
 }
 .link-btn--muted:hover {
   opacity: 1;
@@ -889,8 +891,8 @@ body.on-cover .nav-btn--next:not([disabled]) {
   top: 2px;
   right: 2px;
   z-index: 6;
-  width: 22px;
-  height: 22px;
+  width: 32px;
+  height: 32px;
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -918,6 +920,7 @@ body.on-cover .nav-btn--next:not([disabled]) {
   gap: 4px;
   min-width: 0;
   max-width: 100%;
+  margin: 0 auto;
   padding: 8px 8px 8px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.72);
@@ -1165,7 +1168,7 @@ body.on-cover .nav-btn--next:not([disabled]) {
 .field textarea,
 .library__controls input[type="search"] {
   font: inherit;
-  font-size: 15px;
+  font-size: 16px;
   padding: 10px 12px;
   border-radius: 10px;
   border: 1px solid rgba(44, 62, 90, 0.22);
@@ -1581,8 +1584,8 @@ body.on-cover .nav-btn--next:not([disabled]) {
     padding-bottom: 8px;
   }
   .note-delete {
-    width: 28px;
-    height: 28px;
+    width: 32px;
+    height: 32px;
     font-size: 16px;
   }
   .feature-video {

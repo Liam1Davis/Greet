@@ -49,7 +49,7 @@ console.log("PASS voice note width is compact and clamped to the page");
 
 const metrics = contentMetrics(400, 600);
 assert.strictEqual(metrics.pad, SMALL_PAGE_PADDING);
-const reserved = { x: metrics.areaW - 180, y: 0, w: 180, h: 160 };
+const reserved = { x: 0, y: 0, w: metrics.areaW, h: 160 };
 const laid = layoutMessages(
   [{ id: "note-1", type: "text", text: "Hello Tracey", name: "Sam" }],
   400,
@@ -59,20 +59,8 @@ const laid = layoutMessages(
 );
 assert.ok(laid.length >= 1 && laid[0][0], "first message page still exists with a pinned video card");
 const placed = laid[0][0];
-const videoBox = {
-  x: metrics.pad + reserved.x,
-  y: metrics.pad + reserved.y,
-  w: reserved.w,
-  h: reserved.h,
-};
-const overlapsVideo = !(
-  placed.left + placed.width <= videoBox.x ||
-  videoBox.x + videoBox.w <= placed.left ||
-  placed.top + placed.height <= videoBox.y ||
-  videoBox.y + videoBox.h <= placed.top
-);
-assert.ok(!overlapsVideo, "notes must not cover the top-right video card");
-console.log("PASS first message page reserves the top-right video card");
+assert.ok(placed.top >= metrics.pad + reserved.h, "notes sit below the centered video band");
+console.log("PASS first message page reserves a centered top video band");
 
 const emptyLayout = layoutMessages([], 400, 600, () => ({ w: 0, h: 0 }), {
   reserveFirstPage: reserved,
@@ -82,16 +70,31 @@ assert.ok(Array.isArray(emptyLayout[0]));
 assert.strictEqual(emptyLayout[0].length, 0);
 console.log("PASS empty card still keeps the first message page for the video");
 
-const fourNotes = Array.from({ length: 4 }, (_, i) => ({
+const fiveNotes = Array.from({ length: 5 }, (_, i) => ({
   id: `note-${i}`,
   type: "text",
   text: "Thanks Tracey — good luck in the new job!",
   name: "Alex",
 }));
-const dense = layoutMessages(fourNotes, 647, 915, () => ({ w: 150, h: 72 }));
-assert.strictEqual(dense.length, 1, "four compact notes should share one A4 page");
-assert.strictEqual(dense[0].length, 4);
-console.log("PASS four compact notes fit on one A4 portrait page");
+const dense = layoutMessages(fiveNotes, 647, 915, () => ({ w: 150, h: 72 }));
+assert.strictEqual(dense.length, 1, "five compact notes should share one A4 page");
+assert.strictEqual(dense[0].length, 5);
+console.log("PASS five compact notes fit on one A4 portrait page");
+
+const belowVideo = layoutMessages(
+  Array.from({ length: 3 }, (_, i) => ({
+    id: `below-${i}`,
+    type: "text",
+    text: "A short note",
+    name: "Sam",
+  })),
+  647,
+  915,
+  () => ({ w: 150, h: 72 }),
+  { reserveFirstPage: { x: 0, y: 0, w: 647 - 40 * 2, h: 220 } },
+);
+assert.strictEqual(belowVideo[0].length, 3, "three notes should fit below the centered video");
+console.log("PASS three notes fit below the centered video on page 2");
 
 const app = fs.readFileSync(path.join(root, "js/app.js"), "utf8");
 assert.match(app, /Good Luck In Your New Job\./);
@@ -103,10 +106,15 @@ assert.match(app, /A special address by the leader of the Free World, Donald R\.
 assert.match(app, /A farewell parody address for Tracey/);
 assert.match(app, /pauseHiddenFeatureVideo/);
 assert.match(app, /CardStore\.signIn/);
+assert.match(app, /CardStore\.signOut/);
 assert.match(app, /Delete this message from/);
+assert.match(app, /state\.messages = await CardStore\.getAll\(\)/);
 assert.match(fs.readFileSync(path.join(root, "js/storage.js"), "utf8"), /signInWithPassword/);
+assert.match(fs.readFileSync(path.join(root, "js/storage.js"), "utf8"), /\["audio", BUCKET\]/);
+assert.match(fs.readFileSync(path.join(root, "index.html"), "utf8"), /Admin Mode Active/);
+assert.match(fs.readFileSync(path.join(root, "index.html"), "utf8"), /id="btn-admin"/);
 assert.match(app, /featureVideoCardWidth/);
-assert.match(app, /areaW - cardW/);
+assert.match(app, /\(areaW - cardW\) \/ 2/);
 assert.doesNotMatch(app, /admin_reset_card/);
 assert.doesNotMatch(app, /cleanup_orphan_audio/);
 console.log("PASS cover, final wording, and pinned parody video, no public reset RPC calls");

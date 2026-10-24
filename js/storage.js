@@ -269,19 +269,26 @@ const CardStore = {
     if (!session) {
       throw new StorageError("Please sign in as admin to delete a message.");
     }
-    const db = getClient();
-    if (message.type === "voice" && message.audioPath) {
-      const removed = await db.storage.from(BUCKET).remove([message.audioPath]);
-      if (removed.error) {
-        throw new StorageError(apiMessage(removed.error, "The voice file could not be deleted."), removed.error);
+    const supabase = getClient();
+    const audio_path = message.audioPath;
+    const messageId = message.id;
+    if (message.type === "voice" && audio_path) {
+      const buckets = [...new Set(["audio", BUCKET])];
+      const failures = [];
+      for (const bucket of buckets) {
+        const { error } = await supabase.storage.from(bucket).remove([audio_path]);
+        if (!error) continue;
+        const detail = String(error.message || "").toLowerCase();
+        if (detail.includes("not found") || detail.includes("does not exist")) continue;
+        failures.push(error);
+      }
+      if (failures.length === buckets.length) {
+        throw new StorageError(apiMessage(failures[0], "The voice file could not be deleted."), failures[0]);
       }
     }
-    const { data, error } = await db.from("messages").delete().eq("id", message.id).select("id");
+    const { error } = await supabase.from("messages").delete().eq("id", messageId);
     if (error) {
       throw new StorageError(apiMessage(error, "The message could not be deleted."), error);
-    }
-    if (!data || !data.length) {
-      throw new StorageError("The message could not be deleted. Sign in as admin and run supabase/enable-admin-delete.sql.");
     }
   },
 

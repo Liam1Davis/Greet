@@ -18,11 +18,11 @@ const MAX_PAGE_WIDTH = 794;
 const MAX_PAGE_HEIGHT = 1123;
 
 /** Padding inside the page (keeps notes clear of the edge tap zones). */
-const PAGE_PADDING = 52;
+const PAGE_PADDING = 40;
 /** Padding used on small (phone-sized) pages; still wider than the 28px mobile edge zones. */
-const SMALL_PAGE_PADDING = 36;
-/** Minimum gap between note bounding boxes. Compact tiles need a tighter gap. */
-const GAP = 8;
+const SMALL_PAGE_PADDING = 32;
+/** Minimum gap between note bounding boxes (~12–16px visual spacing). */
+const GAP = 12;
 /** Reference content width (A4 portrait minus padding); widths scale down on smaller pages. */
 const REFERENCE_AREA_W = MAX_PAGE_WIDTH - 2 * PAGE_PADDING;
 
@@ -51,15 +51,15 @@ function computePageSize(availW, availH) {
   };
 }
 /** Max rotation in degrees (notes are rotated between -ROT and +ROT). */
-const ROT = 4;
+const ROT = 3;
 /** Random placement attempts before falling back to a grid scan. */
 const RANDOM_ATTEMPTS = 220;
 /** How many valid random spots to compare before choosing one. */
 const CANDIDATES = 24;
-/** Jitter (px) applied when preferring top-left spots; keeps the scatter natural. */
-const GRAVITY_JITTER = 110;
+/** Jitter (px) applied when preferring top spots; kept low so pages pack denser. */
+const GRAVITY_JITTER = 28;
 /** Grid scan step in px. */
-const SCAN_STEP = 18;
+const SCAN_STEP = 12;
 
 /* Seeded PRNG (mulberry32) and a string hash so layouts are deterministic per message. */
 function hashString(str) {

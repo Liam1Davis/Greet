@@ -241,10 +241,9 @@ async function run() {
         },
         storage: {
           from(bucket) {
-            assert.strictEqual(bucket, "voice-messages");
             return {
               remove: async (paths) => {
-                deleted.storage.push(paths);
+                deleted.storage.push({ bucket, paths });
                 return { error: null };
               },
             };
@@ -257,12 +256,8 @@ async function run() {
               return {
                 eq(col, id) {
                   assert.strictEqual(col, "id");
-                  return {
-                    select() {
-                      deleted.rows.push(id);
-                      return Promise.resolve({ data: [{ id }], error: null });
-                    },
-                  };
+                  deleted.rows.push(id);
+                  return Promise.resolve({ data: null, error: null });
                 },
               };
             },
@@ -282,8 +277,9 @@ async function run() {
     audioPath: "sam/voice.webm",
   });
   assert.ok(deleted.storage[0]);
-  assert.strictEqual(deleted.storage[0].length, 1);
-  assert.strictEqual(String(deleted.storage[0][0]), "sam/voice.webm");
+  assert.strictEqual(String(deleted.storage[0].bucket), "audio");
+  assert.strictEqual(String(deleted.storage[0].paths[0]), "sam/voice.webm");
+  assert.ok(deleted.storage.some((entry) => String(entry.bucket) === "voice-messages"));
   assert.strictEqual(deleted.rows.length, 1);
   assert.strictEqual(deleted.rows[0], "msg-1");
   console.log("PASS admin remove deletes the voice object then the message row");

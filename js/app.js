@@ -320,7 +320,7 @@ function featureVideoCardWidth(areaW) {
 function placeFeatureVideo(metrics) {
   const { pad, areaW, areaH } = metrics;
   const cardW = featureVideoCardWidth(areaW);
-  const maxCardH = Math.min(areaH, Math.max(120, Math.round(areaH * (areaW < 220 ? 0.5 : 0.42))));
+  const maxCardH = Math.min(areaH, Math.max(120, Math.round(areaH * (areaW < 220 ? 0.46 : 0.34))));
   const ratio = state.featureVideoRatio.h / Math.max(state.featureVideoRatio.w, 1);
   const frameH = Math.max(72, Math.min(Math.round(cardW * ratio), maxCardH - 54));
   const card = createFeatureVideoCard();
@@ -331,12 +331,13 @@ function placeFeatureVideo(metrics) {
   }
   const size = measureFeatureVideo(cardW, maxCardH, card);
   const height = Math.min(Math.max(Math.ceil(size.h + 6), frameH + 36), maxCardH);
-  const x = Math.max(0, areaW - cardW);
+  const x = Math.max(0, Math.round((areaW - cardW) / 2));
   card.style.left = `${pad + x}px`;
   card.style.top = `${pad}px`;
   card.style.width = `${cardW}px`;
+  card.style.margin = "0 auto";
   card.style.maxHeight = `${height}px`;
-  return { card, reserved: { x, y: 0, w: cardW, h: height } };
+  return { card, reserved: { x: 0, y: 0, w: areaW, h: height } };
 }
 
 /* Measurement: render a note offscreen at a given width and read its size. */
@@ -555,7 +556,7 @@ async function requestDeleteMessage(message) {
   if (!window.confirm(`Delete this message from ${sender}?`)) return;
   try {
     await CardStore.remove(message);
-    state.messages = state.messages.filter((item) => item.id !== message.id);
+    state.messages = await CardStore.getAll();
     toast("That message has been removed from the card.");
     render();
   } catch (err) {
