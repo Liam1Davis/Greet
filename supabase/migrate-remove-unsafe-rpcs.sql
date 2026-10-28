@@ -14,4 +14,6 @@ drop function if exists public.admin_reset_card(text);
 drop policy if exists "anon can delete voice messages" on storage.objects;
 drop policy if exists "anon can update voice messages" on storage.objects;
 
-revoke update, delete on table public.messages from anon, authenticated;
+revoke update, delete on table public.messages from anon;
+revoke update on table public.messages from authenticated;
+grant delete on table public.messages to authenticated;

@@ -221,7 +221,8 @@ body {
 input:focus-visible,
 textarea:focus-visible,
 .dialog__close:focus-visible,
-.voice-note__play:focus-visible {
+.voice-note__play:focus-visible,
+.voice-note--locked:focus-visible {
   outline: 3px solid rgba(201, 169, 97, 0.65);
   outline-offset: 2px;
 }
@@ -886,6 +887,55 @@ body.on-cover .nav-btn--next:not([disabled]) {
 .voice-note__name::before {
   content: "— ";
 }
+button.voice-note--locked {
+  display: block;
+  font: inherit;
+  font-style: italic;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+  appearance: none;
+  -webkit-appearance: none;
+}
+.voice-note--locked .voice-note__label {
+  font-size: 13px;
+  line-height: 1.25;
+}
+.voice-note__lock {
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+}
+.dialog--pin {
+  width: min(420px, calc(100vw - 20px));
+}
+.dialog--pin .dialog__title {
+  font-size: 20px;
+  line-height: 1.25;
+}
+.dialog--pin .btn,
+.dialog--pin .dialog__close {
+  min-height: 44px;
+}
+.dialog--pin .dialog__close {
+  width: 44px;
+  height: 44px;
+}
+.check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  min-height: 44px;
+  font-size: 16px;
+  line-height: 1.35;
+  cursor: pointer;
+}
+.check-row input {
+  width: 22px;
+  height: 22px;
+  margin-top: 1px;
+  flex: 0 0 auto;
+}
 .note-delete {
   position: absolute;
   top: 2px;
@@ -1147,6 +1197,9 @@ body.on-cover .nav-btn--next:not([disabled]) {
   padding: 0;
   margin: 0;
   min-width: 0;
+}
+.field[hidden] {
+  display: none;
 }
 .field label,
 .field legend,
@@ -1573,6 +1626,7 @@ body.on-cover .nav-btn--next:not([disabled]) {
     width: min(720px, calc(100vw - 20px));
   }
   .dialog--admin-login,
+  .dialog--pin,
   .dialog--small {
     width: min(400px, calc(100vw - 16px));
     max-height: calc(100dvh - 12px);

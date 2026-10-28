@@ -170,7 +170,7 @@ function createTextNote(message, { preview = false } = {}) {
   return note;
 }
 
-function createVoiceNote(message) {
+function createVoiceNote(message, { autoplay = false } = {}) {
   const wave = el(
     "span",
     { class: "voice-note__wave", "aria-hidden": "true" },
@@ -184,9 +184,12 @@ function createVoiceNote(message) {
     text: "▶",
   });
   const duration = el("span", { class: "voice-note__duration", text: formatTime(message.duration) });
-  const note = el("div", { class: "voice-note" }, [
+  const note = el("div", { class: `voice-note${message.isPrivate ? " voice-note--private" : ""}` }, [
     el("div", { class: "voice-note__row" }, [playBtn, wave, duration]),
-    el("span", { class: "voice-note__label", text: "A voice message for you" }),
+    el("span", {
+      class: "voice-note__label",
+      text: message.isPrivate ? "Private message for Tracey" : "A voice message for you",
+    }),
     el("span", { class: "voice-note__name", text: message.name }),
   ]);
 
@@ -200,7 +203,7 @@ function createVoiceNote(message) {
     playBtn.setAttribute("aria-label", `${playing ? "Pause" : "Play"} voice message from ${message.name}`);
   };
 
-  playBtn.addEventListener("click", async () => {
+  const togglePlayback = async () => {
     try {
       if (!audio) {
         const url = await CardStore.getAudioUrl(message);
@@ -233,7 +236,10 @@ function createVoiceNote(message) {
       console.error(err);
       toast("Playback failed. Your browser may not support this audio format.", { type: "error" });
     }
-  });
+  };
+
+  playBtn.addEventListener("click", togglePlayback);
+  if (autoplay) togglePlayback();
 
   // Release blob URLs when the note is removed from the DOM (re-render).
   note.addEventListener("note:dispose", () => {
@@ -244,8 +250,46 @@ function createVoiceNote(message) {
   return note;
 }
 
+function createLockedVoiceNote(message) {
+  const sender = message.name || "someone";
+  const note = el("button", {
+    type: "button",
+    class: "voice-note voice-note--locked",
+    "aria-haspopup": "dialog",
+    "aria-label": `Private message for Tracey — from ${sender}. Enter a PIN to listen.`,
+  }, [
+    el("span", { class: "voice-note__row" }, [
+      el("span", { class: "voice-note__play voice-note__lock", "aria-hidden": "true", text: "🔒" }),
+    ]),
+    el("span", { class: "voice-note__label", text: `Private message for Tracey — from ${sender}` }),
+  ]);
+  note.addEventListener("click", () => openPinDialog(message, note));
+  return note;
+}
+
+function voiceCanPlay(message) {
+  return Boolean(message && (message.audioPath || message.audioFile));
+}
+
 function createNoteElement(message, opts) {
-  return message.type === "voice" ? createVoiceNote(message) : createTextNote(message, opts);
+  if (message.type !== "voice") return createTextNote(message, opts);
+  if (message.isPrivate && !voiceCanPlay(message) && !isAdmin()) return createLockedVoiceNote(message);
+  return createVoiceNote(message, opts);
+}
+
+function copyNotePlacement(from, to) {
+  ["left", "top", "width", "transform", "animationDelay"].forEach((prop) => {
+    to.style[prop] = from.style[prop];
+  });
+  const spin = from.style.getPropertyValue("--note-transform");
+  if (spin) to.style.setProperty("--note-transform", spin);
+}
+
+function revealUnlockedVoice(note, message) {
+  const player = createVoiceNote(message, { autoplay: true });
+  copyNotePlacement(note, player);
+  attachAdminDelete(player, message);
+  if (note.isConnected) note.replaceWith(player);
 }
 
 function applyFeatureVideoRatio() {
@@ -565,12 +609,18 @@ async function requestDeleteMessage(message) {
   }
 }
 
-function applyAdminSession(session) {
+async function applyAdminSession(session) {
   const nextId = session && session.user && session.user.id;
   const prevId = state.adminSession && state.adminSession.user && state.adminSession.user.id;
   state.adminSession = session || null;
   syncChrome();
-  if (nextId !== prevId) render();
+  if (nextId === prevId) return;
+  try {
+    state.messages = await CardStore.getAll();
+  } catch (err) {
+    console.error(err);
+  }
+  render();
 }
 
 function featureVideoPageIndex() {
@@ -653,7 +703,14 @@ function hasMessageDraft() {
 }
 
 function hasVoiceDraft() {
-  return Boolean(voiceName.value.trim() || rec.blob);
+  return Boolean(voiceName.value.trim() || rec.blob || (voicePrivate && voicePrivate.checked) || (voicePin && voicePin.value));
+}
+
+function syncVoicePrivacy() {
+  const on = Boolean(voicePrivate && voicePrivate.checked);
+  if (voicePinField) voicePinField.hidden = !on;
+  if (!on && voicePin) voicePin.value = "";
+  if (!on && voicePinError) setError(voicePin, voicePinError, "");
 }
 
 function syncChrome() {
@@ -974,6 +1031,10 @@ const voiceDialog = $("#dialog-voice");
 const voiceForm = $("#form-voice");
 const voiceName = $("#voice-name");
 const voiceNameError = $("#voice-name-error");
+const voicePrivate = $("#voice-private");
+const voicePinField = $("#voice-pin-field");
+const voicePin = $("#voice-pin");
+const voicePinError = $("#voice-pin-error");
 const voiceError = $("#voice-error");
 const voiceUnsupported = $("#voice-unsupported");
 const recorderEl = $("#recorder");
@@ -995,16 +1056,22 @@ const rec = {
   startedAt: 0,
   duration: 0,
   timerId: null,
+  micReady: null,
+  audioCtx: null,
+  audioSource: null,
+  gainNode: null,
+  processor: null,
+  capturing: false,
+  pcmSampleRate: 0,
+  pcmPreroll: [],
+  pcmChunks: [],
 };
+let micGeneration = 0;
+const PCM_PREROLL_SECONDS = 1.5;
 
 function recordingSupported() {
-  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && globalThis.MediaRecorder);
-}
-
-function pickMimeType() {
-  const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4", "audio/ogg;codecs=opus", "audio/ogg"];
-  if (!globalThis.MediaRecorder?.isTypeSupported) return "";
-  return candidates.find((t) => MediaRecorder.isTypeSupported(t)) || "";
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  return !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia && Ctx);
 }
 
 function setRecorderUi({ status, recording = false, hasRecording = false, playing = false }) {
@@ -1019,16 +1086,299 @@ function setRecorderUi({ status, recording = false, hasRecording = false, playin
   recPlay.textContent = playing ? "❚❚ Pause" : "▶ Play";
 }
 
+function liveMicStream() {
+  return rec.stream && rec.stream.active && rec.stream.getAudioTracks().some((track) => track.readyState === "live")
+    ? rec.stream
+    : null;
+}
+
+function releaseAudioGraph() {
+  rec.capturing = false;
+  rec.pcmPreroll = [];
+  rec.pcmChunks = [];
+  try {
+    if (rec.processor) rec.processor.disconnect();
+  } catch {
+    /* ignore */
+  }
+  rec.processor = null;
+  try {
+    if (rec.audioSource) rec.audioSource.disconnect();
+  } catch {
+    /* ignore */
+  }
+  try {
+    if (rec.gainNode) rec.gainNode.disconnect();
+  } catch {
+    /* ignore */
+  }
+  rec.audioSource = null;
+  rec.gainNode = null;
+  if (rec.audioCtx && rec.audioCtx.state !== "closed") {
+    rec.audioCtx.close().catch(() => {});
+  }
+  rec.audioCtx = null;
+}
+
 function stopStream() {
+  micGeneration += 1;
+  rec.micReady = null;
+  releaseAudioGraph();
   if (rec.stream) {
     rec.stream.getTracks().forEach((t) => t.stop());
     rec.stream = null;
   }
 }
 
+function primeAudioGraph(stream) {
+  try {
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!Ctx) return Promise.resolve();
+    if (!rec.audioCtx || rec.audioCtx.state === "closed") {
+      rec.audioCtx = new Ctx();
+      rec.audioSource = rec.audioCtx.createMediaStreamSource(stream);
+      rec.gainNode = rec.audioCtx.createGain();
+      rec.gainNode.gain.value = 0;
+      rec.audioSource.connect(rec.gainNode);
+      rec.gainNode.connect(rec.audioCtx.destination);
+      attachPcmTap();
+    }
+    if (rec.audioCtx.state === "suspended") {
+      return rec.audioCtx.resume().then(() => attachPcmTap()).catch(() => {});
+    }
+    attachPcmTap();
+  } catch {
+    /* ignore */
+  }
+  return Promise.resolve();
+}
+
+function attachPcmTap() {
+  if (!rec.audioCtx || !rec.audioSource || rec.processor) return;
+  const processor = rec.audioCtx.createScriptProcessor(1024, 1, 1);
+  rec.processor = processor;
+  rec.pcmSampleRate = rec.audioCtx.sampleRate;
+  rec.pcmPreroll = [];
+  rec.pcmChunks = [];
+  rec.capturing = false;
+  processor.onaudioprocess = (event) => {
+    const copy = new Float32Array(event.inputBuffer.getChannelData(0));
+    if (rec.capturing) {
+      rec.pcmChunks.push(copy);
+      return;
+    }
+    rec.pcmPreroll.push(copy);
+    const maxSamples = Math.floor(rec.pcmSampleRate * PCM_PREROLL_SECONDS);
+    let samples = 0;
+    for (let i = 0; i < rec.pcmPreroll.length; i++) samples += rec.pcmPreroll[i].length;
+    while (samples > maxSamples && rec.pcmPreroll.length) samples -= rec.pcmPreroll.shift().length;
+  };
+  rec.audioSource.connect(processor);
+  processor.connect(rec.gainNode || rec.audioCtx.destination);
+}
+
+function frameRms(buf) {
+  let sum = 0;
+  for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
+  return Math.sqrt(sum / Math.max(buf.length, 1));
+}
+
+function flushPreroll() {
+  const frames = rec.pcmPreroll;
+  rec.pcmPreroll = [];
+  if (!frames.length) return [];
+  let start = 0;
+  while (start < frames.length && frameRms(frames[start]) < 0.02) start++;
+  if (start >= frames.length) return [];
+  return frames.slice(start);
+}
+
+function trimSilence(samples, sampleRate) {
+  const thresh = 0.02;
+  const window = Math.max(1, Math.round(sampleRate * 0.02));
+  const quietAt = (from) => {
+    const end = Math.min(samples.length, Math.max(from, 0) + window);
+    const begin = Math.max(0, from);
+    if (end <= begin) return true;
+    let sum = 0;
+    for (let i = begin; i < end; i++) sum += samples[i] * samples[i];
+    return Math.sqrt(sum / (end - begin)) < thresh;
+  };
+  let start = 0;
+  while (start < samples.length && quietAt(start)) start += window;
+  let end = samples.length;
+  while (end > start && quietAt(end - window)) end -= window;
+  const pad = Math.round(sampleRate * 0.02);
+  start = Math.max(0, start - pad);
+  end = Math.min(samples.length, end + pad);
+  return samples.subarray(start, Math.max(start + 1, end));
+}
+
+function flattenOpeningDip(samples, sampleRate) {
+  const headLen = Math.min(samples.length, Math.round(sampleRate * 0.5));
+  const restEnd = Math.min(samples.length, headLen + Math.round(sampleRate * 1.2));
+  if (restEnd <= headLen + 64) return samples;
+  const rms = (from, to) => {
+    let sum = 0;
+    for (let i = from; i < to; i++) sum += samples[i] * samples[i];
+    return Math.sqrt(sum / Math.max(1, to - from));
+  };
+  const headRms = rms(0, headLen);
+  const restRms = rms(headLen, restEnd);
+  if (restRms < 0.03 || headRms >= restRms * 0.8) return samples;
+  const boost = Math.min(3.5, restRms / Math.max(headRms, 0.008));
+  const out = new Float32Array(samples);
+  const fade = Math.max(1, Math.round(sampleRate * 0.2));
+  for (let i = 0; i < headLen; i++) {
+    const t = i < headLen - fade ? 1 : (headLen - i) / fade;
+    const gain = 1 + (boost - 1) * t;
+    out[i] = Math.max(-1, Math.min(1, samples[i] * gain));
+  }
+  return out;
+}
+
+function peakNormalize(samples, peak = 0.89) {
+  let max = 0;
+  for (let i = 0; i < samples.length; i++) {
+    const amp = Math.abs(samples[i]);
+    if (amp > max) max = amp;
+  }
+  if (max < 0.001) return samples;
+  const gain = peak / max;
+  if (Math.abs(gain - 1) < 0.04) return samples;
+  const out = new Float32Array(samples.length);
+  for (let i = 0; i < samples.length; i++) out[i] = Math.max(-1, Math.min(1, samples[i] * gain));
+  return out;
+}
+
+function mergeFloat32(buffers) {
+  const total = buffers.reduce((n, buf) => n + buf.length, 0);
+  const out = new Float32Array(total);
+  let offset = 0;
+  for (const buf of buffers) {
+    out.set(buf, offset);
+    offset += buf.length;
+  }
+  return out;
+}
+
+function downsample(input, srcRate, dstRate) {
+  if (dstRate === srcRate) return input;
+  const ratio = srcRate / dstRate;
+  const length = Math.max(1, Math.round(input.length / ratio));
+  const out = new Float32Array(length);
+  for (let i = 0; i < length; i++) {
+    const pos = i * ratio;
+    const i0 = Math.floor(pos);
+    const i1 = Math.min(input.length - 1, i0 + 1);
+    const frac = pos - i0;
+    out[i] = input[i0] * (1 - frac) + input[i1] * frac;
+  }
+  return out;
+}
+
+function encodeWav(floatBuf, srcRate) {
+  const seconds = floatBuf.length / Math.max(srcRate, 1);
+  const rates = [22050, 16000, 12000];
+  let dstRate = rates[rates.length - 1];
+  for (const rate of rates) {
+    if (44 + Math.ceil(seconds * rate) * 2 <= MAX_UPLOAD_BYTES) {
+      dstRate = rate;
+      break;
+    }
+  }
+  const samples = downsample(floatBuf, srcRate, dstRate);
+  const pcm = new Int16Array(samples.length);
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, samples[i]));
+    pcm[i] = s < 0 ? s * 0x8000 : s * 0x7fff;
+  }
+  const bytes = pcm.length * 2;
+  const buffer = new ArrayBuffer(44 + bytes);
+  const view = new DataView(buffer);
+  const writeStr = (offset, str) => {
+    for (let i = 0; i < str.length; i++) view.setUint8(offset + i, str.charCodeAt(i));
+  };
+  writeStr(0, "RIFF");
+  view.setUint32(4, 36 + bytes, true);
+  writeStr(8, "WAVE");
+  writeStr(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);
+  view.setUint16(22, 1, true);
+  view.setUint32(24, dstRate, true);
+  view.setUint32(28, dstRate * 2, true);
+  view.setUint16(32, 2, true);
+  view.setUint16(34, 16, true);
+  writeStr(36, "data");
+  view.setUint32(40, bytes, true);
+  new Int16Array(buffer, 44).set(pcm);
+  return new Blob([buffer], { type: "audio/wav" });
+}
+
+function waitForTrackLive(stream) {
+  const track = stream.getAudioTracks()[0];
+  if (!track || track.readyState !== "live" || !track.muted) return Promise.resolve();
+  return new Promise((resolve) => {
+    const finish = () => {
+      track.removeEventListener("unmute", finish);
+      resolve();
+    };
+    track.addEventListener("unmute", finish);
+    setTimeout(finish, 400);
+  });
+}
+
+function microphoneErrorMessage(err) {
+  const denied = err && (err.name === "NotAllowedError" || err.name === "SecurityError");
+  const missing = err && (err.name === "NotFoundError" || err.name === "DevicesNotFoundError");
+  if (denied) {
+    return "Microphone access was blocked. Please allow microphone access in your browser and try again, or add a written message instead.";
+  }
+  if (missing) return "We couldn’t find a microphone on this device.";
+  return "We couldn’t start recording. Please check your microphone and try again.";
+}
+
+function prepareMicrophone() {
+  if (!recordingSupported()) return Promise.resolve(null);
+  const existing = liveMicStream();
+  if (existing) {
+    return primeAudioGraph(existing).then(() => existing);
+  }
+  if (rec.micReady) return rec.micReady;
+  const generation = ++micGeneration;
+  rec.micReady = (async () => {
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: {
+        channelCount: 1,
+        echoCancellation: true,
+        noiseSuppression: false,
+        autoGainControl: false,
+      },
+    });
+    if (generation !== micGeneration) {
+      stream.getTracks().forEach((t) => t.stop());
+      return null;
+    }
+    rec.stream = stream;
+    await primeAudioGraph(stream);
+    await waitForTrackLive(stream);
+    if (generation !== micGeneration) return null;
+    return stream;
+  })().catch((err) => {
+    if (generation === micGeneration) {
+      rec.micReady = null;
+      rec.stream = null;
+    }
+    throw err;
+  });
+  return rec.micReady;
+}
+
 function resetRecorder() {
   clearInterval(rec.timerId);
   rec.timerId = null;
+  rec.capturing = false;
   if (rec.recorder && rec.recorder.state !== "inactive") {
     try {
       rec.recorder.stop();
@@ -1049,60 +1399,29 @@ function resetRecorder() {
 
 async function startRecording() {
   setError(null, voiceError, "");
+  if (rec.capturing) return;
+  if (!liveMicStream()) setRecorderUi({ status: "Starting…" });
+  let stream;
   try {
-    rec.stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    stream = await prepareMicrophone();
   } catch (err) {
-    const denied = err && (err.name === "NotAllowedError" || err.name === "SecurityError");
-    const missing = err && (err.name === "NotFoundError" || err.name === "DevicesNotFoundError");
-    setError(
-      null,
-      voiceError,
-      denied
-        ? "Microphone access was blocked. Please allow microphone access in your browser and try again, or add a written message instead."
-        : missing
-          ? "We couldn’t find a microphone on this device."
-          : "We couldn’t start recording. Please check your microphone and try again.",
-    );
+    setError(null, voiceError, microphoneErrorMessage(err));
+    setRecorderUi({ status: "Microphone not ready" });
     return;
   }
-
-  const mimeType = pickMimeType();
-  let recorder;
-  try {
-    recorder = mimeType ? new MediaRecorder(rec.stream, { mimeType }) : new MediaRecorder(rec.stream);
-  } catch (err) {
-    stopStream();
+  if (!stream) {
+    setError(null, voiceError, "We couldn’t start recording. Please check your microphone and try again.");
+    setRecorderUi({ status: "Microphone not ready" });
+    return;
+  }
+  attachPcmTap();
+  if (!rec.processor) {
     setError(null, voiceError, "Recording isn’t supported in this browser. Please try another browser or add a written message.");
+    setRecorderUi({ status: "Microphone not ready" });
     return;
   }
-  rec.recorder = recorder;
-
-  rec.chunks = [];
-  recorder.addEventListener("dataavailable", (e) => {
-    if (e.data && e.data.size > 0) rec.chunks.push(e.data);
-  });
-  recorder.addEventListener("stop", () => {
-    // Ignore if the dialog was closed / reset while recording.
-    if (rec.recorder !== recorder) return;
-    clearInterval(rec.timerId);
-    rec.timerId = null;
-    stopStream();
-    rec.duration = Math.max(1, Math.round((Date.now() - rec.startedAt) / 1000));
-    rec.blob = new Blob(rec.chunks, { type: recorder.mimeType || mimeType || "audio/webm" });
-    if (rec.blob.size > MAX_UPLOAD_BYTES) {
-      rec.blob = null;
-      setRecorderUi({ status: "Recording too large" });
-      setError(null, voiceError, "That recording is larger than 5 MB. Delete it and record a shorter message.");
-      return;
-    }
-    if (rec.url) URL.revokeObjectURL(rec.url);
-    rec.url = URL.createObjectURL(rec.blob);
-    recAudio.src = rec.url;
-    recTimer.textContent = formatTime(rec.duration);
-    setRecorderUi({ status: `Recording ready (${formatTime(rec.duration)}). Listen back before adding it.`, hasRecording: true });
-  });
-
-  recorder.start(250);
+  rec.pcmChunks = flushPreroll();
+  rec.capturing = true;
   rec.startedAt = Date.now();
   recTimer.textContent = "00:00";
   setRecorderUi({ status: "Recording… speak now", recording: true });
@@ -1117,12 +1436,44 @@ async function startRecording() {
   }, 250);
 }
 
-function stopRecording() {
-  if (rec.recorder && rec.recorder.state === "recording") {
-    rec.recorder.stop();
-    setRecorderUi({ status: "Finishing…", recording: false });
-    recStart.disabled = true;
+function finishRecording() {
+  rec.capturing = false;
+  clearInterval(rec.timerId);
+  rec.timerId = null;
+  const frames = rec.pcmChunks;
+  rec.pcmChunks = [];
+  if (!frames.length) {
+    setError(null, voiceError, "We didn’t catch any audio. Please try recording again.");
+    setRecorderUi({ status: "Ready to record" });
+    return;
   }
+  const rate = Math.max(rec.pcmSampleRate, 1);
+  let merged = mergeFloat32(frames);
+  merged = trimSilence(merged, rate);
+  merged = flattenOpeningDip(merged, rate);
+  merged = peakNormalize(merged);
+  rec.duration = Math.max(1, Math.round(merged.length / rate));
+  rec.blob = encodeWav(merged, rate);
+  if (rec.blob.size > MAX_UPLOAD_BYTES) {
+    rec.blob = null;
+    setRecorderUi({ status: "Recording too large" });
+    setError(null, voiceError, "That recording is larger than 5 MB. Delete it and record a shorter message.");
+    return;
+  }
+  if (rec.url) URL.revokeObjectURL(rec.url);
+  rec.url = URL.createObjectURL(rec.blob);
+  recAudio.src = rec.url;
+  recTimer.textContent = formatTime(rec.duration);
+  setRecorderUi({ status: `Recording ready (${formatTime(rec.duration)}). Listen back before adding it.`, hasRecording: true });
+}
+
+function stopRecording() {
+  if (!rec.capturing) return;
+  setRecorderUi({ status: "Finishing…", recording: false });
+  recStart.disabled = true;
+  rec.capturing = false;
+  // Let the current audio buffer flush into pcmChunks before encoding.
+  setTimeout(finishRecording, 80);
 }
 
 recStart.addEventListener("click", () => {
@@ -1154,12 +1505,23 @@ recAudio.addEventListener("ended", () =>
 recDelete.addEventListener("click", () => {
   resetRecorder();
   recStart.focus();
+  prepareMicrophone()
+    .then(() => {
+      if (!rec.blob && !rec.capturing) {
+        setRecorderUi({ status: "Ready to record" });
+      }
+    })
+    .catch(() => {});
 });
 voiceName.addEventListener("input", () => setError(voiceName, voiceNameError, ""));
+if (voicePrivate) voicePrivate.addEventListener("change", syncVoicePrivacy);
+if (voicePin) voicePin.addEventListener("input", () => setError(voicePin, voicePinError, ""));
 
 voiceForm.addEventListener("submit", async (e) => {
   e.preventDefault();
   const name = voiceName.value.trim();
+  const isPrivate = Boolean(voicePrivate && voicePrivate.checked);
+  const pin = voicePin ? voicePin.value.trim() : "";
   if (!name) {
     setError(voiceName, voiceNameError, "Please enter your name.");
     voiceName.focus();
@@ -1169,15 +1531,29 @@ voiceForm.addEventListener("submit", async (e) => {
     setError(null, voiceError, "Record a message first, then add it to the card.");
     return;
   }
+  if (isPrivate && !/^\d{4}$/.test(pin)) {
+    setError(voicePin, voicePinError, "Enter a 4-digit PIN.");
+    if (voicePin) voicePin.focus();
+    return;
+  }
   voiceSubmit.disabled = true;
   try {
-    const message = await CardStore.addVoice({ name, blob: rec.blob, duration: rec.duration });
+    const message = await CardStore.addVoice({
+      name,
+      blob: rec.blob,
+      duration: rec.duration,
+      isPrivate,
+      pin: isPrivate ? pin : "",
+    });
     state.messages = await CardStore.getAll();
     resetRecorder();
     voiceForm.reset();
+    syncVoicePrivacy();
     voiceDialog.close();
     render({ focusMessageId: message.id });
-    toast("Your voice message has been added to Tracey’s card.");
+    toast(isPrivate
+      ? "Your private voice message has been added. It stays locked until the PIN is entered."
+      : "Your voice message has been added to Tracey’s card.");
   } catch (err) {
     console.error(err);
     setError(null, voiceError, err instanceof StorageError ? err.message : "Sorry, we couldn’t save your recording.");
@@ -1189,8 +1565,10 @@ function openVoiceDialog() {
   if (!hasVoiceDraft()) {
     voiceForm.reset();
     setError(voiceName, voiceNameError, "");
+    setError(voicePin, voicePinError, "");
     resetRecorder();
   }
+  syncVoicePrivacy();
   const supported = recordingSupported();
   voiceUnsupported.hidden = supported;
   $(".recorder__controls").hidden = !supported;
@@ -1198,10 +1576,80 @@ function openVoiceDialog() {
   $(".recorder__bars").hidden = !supported;
   voiceDialog.showModal();
   voiceName.focus({ preventScroll: true });
+  if (supported && !rec.blob) {
+    setRecorderUi({ status: "Getting the microphone ready…" });
+    prepareMicrophone()
+      .then((stream) => {
+        if (!stream || rec.blob || rec.capturing) return;
+        setRecorderUi({ status: "Ready to record" });
+      })
+      .catch((err) => {
+        setError(null, voiceError, microphoneErrorMessage(err));
+        setRecorderUi({ status: "Microphone not ready" });
+      });
+  }
 }
 
-setupDialogClose(voiceDialog);
+setupDialogClose(voiceDialog, () => {
+  if (rec.capturing) {
+    resetRecorder();
+    return;
+  }
+  if (!rec.blob) stopStream();
+});
 $("#btn-add-voice").addEventListener("click", openVoiceDialog);
+
+/* ------------------------------------------------------------------------ */
+/* Private voice PIN                                                         */
+/* ------------------------------------------------------------------------ */
+
+const pinDialog = $("#dialog-pin");
+const pinForm = $("#form-pin");
+const pinInput = $("#pin-input");
+const pinError = $("#pin-error");
+const pinSubmit = $("#pin-submit");
+let pendingUnlock = null;
+
+function openPinDialog(message, note) {
+  pendingUnlock = { message, note };
+  if (pinError) pinError.textContent = "";
+  if (pinForm) pinForm.reset();
+  if (!pinDialog) return;
+  pinDialog.showModal();
+  if (pinInput) pinInput.focus({ preventScroll: true });
+}
+
+if (pinForm) {
+  pinForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+    if (!pendingUnlock) return;
+    const pin = pinInput ? pinInput.value : "";
+    if (!String(pin).trim()) {
+      if (pinError) pinError.textContent = "Enter the 4-digit PIN or master passcode.";
+      return;
+    }
+    if (pinSubmit) pinSubmit.disabled = true;
+    const { message, note } = pendingUnlock;
+    try {
+      const audioPath = await CardStore.unlockVoice(message.id, pin);
+      message.audioPath = audioPath;
+      if (pinForm) pinForm.reset();
+      if (pinDialog) pinDialog.close();
+      if (note && note.isConnected) revealUnlockedVoice(note, message);
+      else render({ focusMessageId: message.id });
+    } catch (err) {
+      console.error(err);
+      if (pinError) pinError.textContent = err instanceof StorageError ? err.message : "Incorrect PIN";
+    } finally {
+      if (pinSubmit) pinSubmit.disabled = false;
+    }
+  });
+}
+if (pinDialog) {
+  setupDialogClose(pinDialog, () => {
+    pendingUnlock = null;
+  });
+}
 
 /* ------------------------------------------------------------------------ */
 /* Admin sign-in (Supabase Auth) and localhost archive export                 */
@@ -1237,7 +1685,7 @@ if (adminLoginForm) {
     if (adminLoginSubmit) adminLoginSubmit.disabled = true;
     try {
       const session = await CardStore.signIn(email, password);
-      applyAdminSession(session);
+      await applyAdminSession(session);
       adminLoginForm.reset();
       adminLoginDialog.close();
       toast("Admin mode is on. You can delete messages from the card.");
@@ -1271,7 +1719,7 @@ if (adminLogout) {
     } catch (err) {
       console.error(err);
     }
-    applyAdminSession(null);
+    await applyAdminSession(null);
     toast("Signed out of admin mode.");
   });
 }
@@ -1326,13 +1774,11 @@ async function init() {
   }
 
   try {
-    const [messages, session] = await Promise.all([
-      CardStore.getAll(),
-      CardStore.getSession().catch(() => null),
-      ratioReady,
-    ]);
-    state.messages = messages;
+    const session = await CardStore.getSession().catch(() => null);
     state.adminSession = session;
+    const messages = await CardStore.getAll();
+    await ratioReady;
+    state.messages = messages;
   } catch (err) {
     await ratioReady;
     toast(err instanceof StorageError ? err.message : "Could not load the shared card.", { type: "error", duration: 8000 });

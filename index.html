@@ -203,6 +203,15 @@
         </div>
         <audio id="rec-audio" preload="auto" hidden></audio>
         <p class="field__error" id="voice-error" role="alert"></p>
+        <label class="check-row" for="voice-private">
+          <input type="checkbox" id="voice-private" name="private" />
+          <span>Make this message private (for Tracey only)</span>
+        </label>
+        <div class="field" id="voice-pin-field" hidden>
+          <label for="voice-pin">Set a PIN so you or Tracey can unlock it <span class="req" aria-hidden="true">*</span></label>
+          <input type="password" id="voice-pin" name="pin" inputmode="numeric" autocomplete="new-password" autocapitalize="off" spellcheck="false" maxlength="4" placeholder="4 digits" />
+          <p class="field__error" id="voice-pin-error" role="alert"></p>
+        </div>
         <p class="dialog__hint">Recordings can last up to 3 minutes and must be 5 MB or smaller. Listen back before adding the note to the card.</p>
         <p class="recorder__unsupported" id="voice-unsupported" hidden>
           Sorry, your browser doesn’t support audio recording. Please try a recent version of Chrome, Edge, Firefox or Safari,
@@ -228,6 +237,25 @@
       </button>
     </div>
   </div>
+
+  <!-- PIN for a private voice note -->
+  <dialog class="dialog dialog--small dialog--pin" id="dialog-pin" aria-labelledby="dialog-pin-title">
+    <form method="dialog" class="dialog__form" id="form-pin" novalidate>
+      <header class="dialog__header">
+        <h2 class="dialog__title" id="dialog-pin-title">Enter 4-digit PIN or Master Passcode to listen</h2>
+        <button type="button" class="dialog__close" data-close aria-label="Close">×</button>
+      </header>
+      <div class="field">
+        <label for="pin-input">PIN or passcode <span class="req" aria-hidden="true">*</span></label>
+        <input type="password" id="pin-input" name="pin" autocomplete="off" autocapitalize="off" spellcheck="false" maxlength="64" />
+      </div>
+      <p class="field__error" id="pin-error" role="alert"></p>
+      <footer class="dialog__actions">
+        <button type="button" class="btn btn--ghost" data-close>Cancel</button>
+        <button type="submit" class="btn btn--primary" id="pin-submit">Listen</button>
+      </footer>
+    </form>
+  </dialog>
 
   <!-- Admin sign-in (Supabase Auth email + password) -->
   <dialog class="dialog dialog--small dialog--admin-login" id="dialog-admin-login" aria-labelledby="dialog-admin-login-title">

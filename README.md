@@ -16,7 +16,8 @@ This card has **no contributor logins**. The browser uses the public anon/publis
 | Add a written or voice message | Anyone with the website |
 | Change someone else’s message | Nobody via the website |
 | Delete one message | Organiser, after **Admin** sign-in with a Supabase Auth email and password |
-| Play a voice message | Anyone with the website, via a short-lived signed URL |
+| Play a public voice message | Anyone with the website, via a short-lived signed URL |
+| Play a private voice message | Someone with that note’s 4-digit PIN, or the master passcode. Admin can play it without the PIN |
 | Wipe the whole card | **Not available on the website.** Use the Supabase dashboard |
 | Export an offline archive | Shown only when you open the site on `localhost` on your computer |
 
@@ -47,10 +48,11 @@ Leave the placeholders (`YOUR-PROJECT`, `YOUR-PUBLISHABLE-ANON-KEY`) and the app
 3. Run all of [supabase/setup.sql](supabase/setup.sql).  
    It is safe to re-run. If `public.messages` already exists with dashboard names (`audio_key`, `contributor_name`, and so on), those columns are renamed to the names the app uses. Rows are not deleted.
    If the project is already live and you only need Admin delete, run [supabase/enable-admin-delete.sql](supabase/enable-admin-delete.sql) instead.
-4. **Authentication → Users → Add user** with the organiser email and password. Use that pair in the footer **Admin** control.
-5. Confirm **Storage → Buckets** shows `voice-messages` as **private**, 5 MB limit. Admin delete removes the object from this bucket, then the `public.messages` row.
-6. Confirm **Table Editor → messages** shows `audio_path` (not `audio_key`) plus `type`, `name`, `text`, `font`, `duration`, and `mime_type`.
-7. Redeploy on Netlify (`main`, empty base, empty build, publish `.`) or refresh a local server.
+4. If the card is already live, also run [supabase/private-voice.sql](supabase/private-voice.sql). A fresh run of `setup.sql` already includes it. Then, if Tracey should open every private note with one passcode, run the commented `insert into public.card_secrets` statement in that file with a passphrase you choose. Do not commit the passphrase.
+5. **Authentication → Users → Add user** with the organiser email and password. Use that pair in the footer **Admin** control. The GitHub login that opens this dashboard is not the Admin password.
+6. Confirm **Storage → Buckets** shows `voice-messages` as **private**, 5 MB limit. Admin delete removes the object from this bucket, then the `public.messages` row. Private recordings are stored under `private/` and stay unplayable until the PIN check.
+7. Confirm **Table Editor → messages** shows `audio_path` (not `audio_key`) plus `type`, `name`, `text`, `font`, `duration`, `mime_type`, and `is_private`.
+8. Redeploy on Netlify (`main`, empty base, empty build, publish `.`) or refresh a local server.
 
 **Enabling RLS without the policies in `setup.sql` would hide every row from the API.**
 
@@ -80,9 +82,10 @@ If a save fails, the site must show an error and must **not** say the message wa
 - **Page 1** is the cover. Use **Turn the page to leave your message →**.
 - **Page 2** is the only place to add a written or voice message. Editors open as dialogs so they do not stretch the A4 page.
 - Further pages show submitted notes. Voice **playback** stays on those notes.
+- In the voice dialog, **Make this message private (for Tracey only)** asks for a 4-digit PIN. The card then shows a lock. The PIN, or the master passcode, opens it. Admin mode plays and deletes that note without the PIN.
 - The final page is always last.
 - Each page is A4 portrait (210 × 297 proportions). On a wide desktop, two portrait pages may sit side by side. On a phone, one portrait page is shown.
-- **Export archive** (localhost only): downloads a ZIP. Unzip and open `index.html` from disk — no internet and no local server. Messages are embedded in `js/archive-data.js`. The archive CTA reads **Open your card →**.
+- **Export archive** (localhost only): downloads a ZIP. Unzip and open `index.html` from disk — no internet and no local server. Messages are embedded in `js/archive-data.js`. The archive CTA reads **Open your card →**. A private recording is included only after you sign in as Admin. Otherwise the ZIP keeps the lock and omits that audio file.
 
 ## Netlify
 
@@ -115,6 +118,7 @@ js/layout.js
 js/fonts.js
 js/messages-library.js
 supabase/setup.sql
+supabase/private-voice.sql
 supabase/migrate-remove-unsafe-rpcs.sql
 assets/bouquet.svg      ← original watercolour-style botanical SVG
 assets/
@@ -133,7 +137,7 @@ assets/
 
 **You still need to do**
 
-- Run `supabase/setup.sql` and, if the earlier script was already applied, `supabase/migrate-remove-unsafe-rpcs.sql`.
+- Run `supabase/setup.sql` and, if the earlier script was already applied, `supabase/migrate-remove-unsafe-rpcs.sql`. For a card that is already live, run `supabase/private-voice.sql` as well.
 - Keep your Project URL and anon key in `js/supabase-config.js` (do not replace real values with placeholders).
 - Deploy the updated files.
 - Pass the two-device test.

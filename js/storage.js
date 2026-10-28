@@ -87,10 +87,31 @@ function rowToMessage(row) {
     font: row.font || undefined,
     duration: row.duration == null ? undefined : Number(row.duration),
     mimeType: row.mime_type || undefined,
-    audioPath: row.audio_path || undefined,
+    audioPath: row.audio_path || row.audioPath || undefined,
     audioFile: row.audioFile || undefined,
+    isPrivate: Boolean(row.is_private || row.isPrivate),
     createdAt: row.created_at || row.createdAt,
   };
+}
+
+const MESSAGE_COLUMNS = "id, type, name, text, font, duration, mime_type, audio_path, is_private, created_at";
+const LEGACY_COLUMNS = "id, type, name, text, font, duration, mime_type, audio_path, created_at";
+
+function isMissingPrivateSchema(error) {
+  const detail = String((error && (error.message || error.details || error.hint)) || "").toLowerCase();
+  return detail.includes("card_messages")
+    || detail.includes("is_private")
+    || detail.includes("schema cache")
+    || detail.includes("could not find the table")
+    || detail.includes("does not exist");
+}
+
+function privateSetupMessage(error, fallback) {
+  const detail = String((error && (error.message || error.details || error.hint)) || "");
+  if (/create_private_voice_message|unlock_voice_message|schema cache|could not find the function|does not exist/i.test(detail)) {
+    return "Private voice notes are not enabled on the shared card yet. In the Supabase SQL Editor, run supabase/private-voice.sql.";
+  }
+  return apiMessage(error, fallback);
 }
 
 function extForMime(mime) {
@@ -118,14 +139,23 @@ const CardStore = {
     if (archive) {
       return archive.messages.map(rowToMessage).filter(Boolean).sort((a, b) => (a.createdAt < b.createdAt ? -1 : 1));
     }
-    const { data, error } = await getClient()
-      .from("messages")
-      .select("id, type, name, text, font, duration, mime_type, audio_path, created_at")
+    const db = getClient();
+    const fromView = await db
+      .from("card_messages")
+      .select(MESSAGE_COLUMNS)
       .order("created_at", { ascending: true });
-    if (error) {
-      throw new StorageError(apiMessage(error, "Could not load messages from the shared card."), error);
+    if (!fromView.error) return (fromView.data || []).map(rowToMessage);
+    if (!isMissingPrivateSchema(fromView.error)) {
+      throw new StorageError(apiMessage(fromView.error, "Could not load messages from the shared card."), fromView.error);
     }
-    return (data || []).map(rowToMessage);
+    const fromTable = await db
+      .from("messages")
+      .select(LEGACY_COLUMNS)
+      .order("created_at", { ascending: true });
+    if (fromTable.error) {
+      throw new StorageError(apiMessage(fromTable.error, "Could not load messages from the shared card."), fromTable.error);
+    }
+    return (fromTable.data || []).map(rowToMessage);
   },
 
   async addText({ name, text, font }) {
@@ -156,11 +186,12 @@ const CardStore = {
     return rowToMessage(data);
   },
 
-  async addVoice({ name, blob, duration }) {
+  async addVoice({ name, blob, duration, isPrivate = false, pin = "" }) {
     if (archivePayload()) {
       throw new StorageError("This offline archive cannot accept new messages.");
     }
     const trimmedName = String(name || "").trim();
+    const trimmedPin = String(pin || "").trim();
     if (!trimmedName) throw new StorageError("Please enter your name before recording.");
     if (!blob || !blob.size) throw new StorageError("Record a message first, then add it to the card.");
     if (blob.size > MAX_UPLOAD_BYTES) {
@@ -170,10 +201,13 @@ const CardStore = {
     if (seconds < 1 || seconds > 180) {
       throw new StorageError("Voice messages must be between 1 second and 3 minutes.");
     }
+    if (isPrivate && !/^\d{4}$/.test(trimmedPin)) {
+      throw new StorageError("Enter a 4-digit PIN.");
+    }
 
     const id = uid();
     const mimeType = blob.type || "audio/webm";
-    const audioPath = `${id}.${extForMime(mimeType)}`;
+    const audioPath = `${isPrivate ? "private/" : ""}${id}.${extForMime(mimeType)}`;
     const db = getClient();
 
     const uploaded = await db.storage.from(BUCKET).upload(audioPath, blob, {
@@ -182,6 +216,35 @@ const CardStore = {
     });
     if (uploaded.error) {
       throw new StorageError(apiMessage(uploaded.error, "The recording could not be uploaded."), uploaded.error);
+    }
+
+    if (isPrivate) {
+      const saved = await db.rpc("create_private_voice_message", {
+        message_id: id,
+        sender_name: trimmedName,
+        duration_seconds: seconds,
+        mime_type: mimeType,
+        audio_path: audioPath,
+        pin: trimmedPin,
+      });
+      if (saved.error || !saved.data) {
+        throw new StorageError(
+          privateSetupMessage(
+            saved.error,
+            "The recording uploaded but was not added to the card. It is not a submitted message. In the Supabase dashboard, open Storage → voice-messages and delete any file that has no matching row in the messages table.",
+          ),
+          saved.error,
+        );
+      }
+      return rowToMessage({
+        id,
+        type: "voice",
+        name: trimmedName,
+        duration: seconds,
+        mime_type: mimeType,
+        is_private: true,
+        created_at: new Date().toISOString(),
+      });
     }
 
     const inserted = await db
@@ -196,7 +259,7 @@ const CardStore = {
         mime_type: mimeType,
         audio_path: audioPath,
       })
-      .select("id, type, name, text, font, duration, mime_type, audio_path, created_at")
+      .select(LEGACY_COLUMNS)
       .single();
 
     if (inserted.error || !inserted.data) {
@@ -209,6 +272,33 @@ const CardStore = {
       );
     }
     return rowToMessage(inserted.data);
+  },
+
+  async unlockVoice(messageId, pin) {
+    if (archivePayload()) {
+      throw new StorageError("This offline archive does not include that recording. Open the live card and enter the PIN.");
+    }
+    const provided = String(pin || "");
+    if (!messageId || provided.trim().length < 4) {
+      throw new StorageError("Incorrect PIN");
+    }
+    const { data, error } = await getClient().rpc("unlock_voice_message", {
+      message_id: messageId,
+      provided_pin: provided,
+    });
+    if (error) {
+      const detail = String(error.message || "");
+      if (/incorrect pin|invalid input syntax for type uuid|message not found/i.test(detail)) {
+        throw new StorageError("Incorrect PIN", error);
+      }
+      throw new StorageError(privateSetupMessage(error, "This private message could not be unlocked."), error);
+    }
+    const path = data && (data.audio_path || data.audioPath);
+    if (!data || data.ok === false || !path) {
+      const reason = data && data.error ? String(data.error) : "Incorrect PIN";
+      throw new StorageError(reason === "Incorrect PIN" ? "Incorrect PIN" : reason);
+    }
+    return path;
   },
 
   async getAudioUrl(message) {
@@ -286,9 +376,22 @@ const CardStore = {
         throw new StorageError(apiMessage(failures[0], "The voice file could not be deleted."), failures[0]);
       }
     }
-    const { error } = await supabase.from("messages").delete().eq("id", messageId);
+    const { data, error } = await supabase.from("messages").delete().eq("id", messageId).select("id");
     if (error) {
+      const detail = String(error.message || "").toLowerCase();
+      if (detail.includes("permission denied")) {
+        throw new StorageError(
+          "The database refused the delete. In the Supabase SQL Editor, run supabase/fix-admin-delete.sql.",
+          error,
+        );
+      }
       throw new StorageError(apiMessage(error, "The message could not be deleted."), error);
+    }
+    if (!data || !data.length) {
+      const email = session.user && session.user.email ? session.user.email : "your Admin email";
+      throw new StorageError(
+        `The database kept this message. Signed in as ${email}. Run supabase/fix-admin-delete.sql, or lock the delete policy to that exact email.`,
+      );
     }
   },
 

@@ -137,8 +137,37 @@ async function run() {
   const migration = fs.readFileSync(path.join(root, "supabase/migrate-remove-unsafe-rpcs.sql"), "utf8");
   assert.match(migration, /drop function if exists public\.cleanup_orphan_audio/);
   assert.match(migration, /drop function if exists public\.admin_reset_card/);
+  assert.match(migration, /grant delete on table public.messages to authenticated/);
   assert.doesNotMatch(migration, /delete from public\.messages/i);
   console.log("PASS migration drops unsafe RPCs without deleting messages");
+
+  const restoreGrant = fs.readFileSync(path.join(root, "supabase/restore-admin-delete-grant.sql"), "utf8");
+  assert.match(restoreGrant, /grant delete on table public.messages to authenticated/);
+  assert.doesNotMatch(restoreGrant, /delete from public\.messages/i);
+  assert.doesNotMatch(restoreGrant, /drop policy/i);
+  console.log("PASS restore-admin-delete-grant.sql restores GRANT DELETE without changing policies");
+
+  const fixDelete = fs.readFileSync(path.join(root, "supabase/fix-admin-delete.sql"), "utf8");
+  assert.match(fixDelete, /grant delete on table public.messages to authenticated/);
+  assert.match(fixDelete, /authenticated can delete messages/);
+  assert.match(fixDelete, /auth\.role\(\) = 'authenticated'/);
+  assert.doesNotMatch(fixDelete, /delete from public\.messages/i);
+  console.log("PASS fix-admin-delete.sql restores authenticated delete without wiping rows");
+
+  const privateSql = fs.readFileSync(path.join(root, "supabase/private-voice.sql"), "utf8");
+  assert.match(privateSql, /function public\.unlock_voice_message/);
+  assert.match(privateSql, /function public\.create_private_voice_message/);
+  assert.match(privateSql, /crypt\(/);
+  assert.match(privateSql, /message_pins/);
+  assert.match(privateSql, /is_private/);
+  assert.match(privateSql, /voice_playback_grants/);
+  assert.match(privateSql, /name not like 'private\/%'/);
+  assert.match(privateSql, /Incorrect PIN/);
+  assert.match(privateSql, /revoke all on public\.message_pins/i);
+  assert.doesNotMatch(privateSql, /service_role/);
+  assert.match(sql, /function public\.unlock_voice_message/);
+  assert.match(sql, /drop policy if exists "anon can read voice messages"/);
+  console.log("PASS private voice SQL hashes the PIN and blocks anonymous reads of private/");
 
   let wipeBlocked = false;
   try {
@@ -208,8 +237,135 @@ async function run() {
   assert.strictEqual(voiceRow.font, null);
   assert.strictEqual(voiceRow.duration, 12);
   assert.ok(voiceRow.audio_path && !String(voiceRow.audio_path).startsWith("http"));
+  assert.ok(!String(voiceRow.audio_path).startsWith("private/"));
+  assert.strictEqual(voiceRow.pin, undefined);
+  assert.strictEqual(voiceRow.is_private, undefined);
   assert.strictEqual(saved.type, "voice");
+  assert.strictEqual(saved.isPrivate, false);
   console.log("PASS voice insert sends type, null text/font, duration, and audio_path");
+
+  const privateUploads = [];
+  const privateRpc = [];
+  const privateWin = makeWindow();
+  privateWin.window.LEAVING_CARD_SUPABASE = {
+    url: "https://example.supabase.co",
+    anonKey: "test-publishable-anon-key",
+  };
+  privateWin.window.supabase = {
+    createClient() {
+      return {
+        storage: {
+          from() {
+            return {
+              upload: async (path) => {
+                privateUploads.push(path);
+                return { error: null };
+              },
+            };
+          },
+        },
+        rpc: async (fn, args) => {
+          privateRpc.push({ fn, args });
+          return { data: args.message_id, error: null };
+        },
+        from() {
+          return {
+            insert() {
+              throw new Error("private voice must not insert pin_hash from the browser");
+            },
+          };
+        },
+      };
+    },
+  };
+  loadScript("js/storage.js", privateWin);
+  const privateStore = privateWin.window.LeavingCard.storage.CardStore;
+  const privateBlob = new Blob([new Uint8Array(16)], { type: "audio/webm" });
+  let pinRejected = false;
+  try {
+    await privateStore.addVoice({ name: "Sam", blob: privateBlob, duration: 4, isPrivate: true, pin: "12" });
+  } catch (err) {
+    pinRejected = /4-digit PIN/.test(err.message);
+  }
+  assert.ok(pinRejected, "a private voice note requires a 4-digit PIN before upload");
+  assert.strictEqual(privateUploads.length, 0);
+  const privateSaved = await privateStore.addVoice({
+    name: "Sam",
+    blob: privateBlob,
+    duration: 4,
+    isPrivate: true,
+    pin: "2468",
+  });
+  assert.strictEqual(privateRpc.length, 1);
+  assert.strictEqual(privateRpc[0].fn, "create_private_voice_message");
+  assert.strictEqual(privateRpc[0].args.pin, "2468");
+  assert.strictEqual(privateRpc[0].args.sender_name, "Sam");
+  assert.ok(String(privateRpc[0].args.audio_path).startsWith("private/"));
+  assert.strictEqual(privateUploads[0], privateRpc[0].args.audio_path);
+  assert.strictEqual(privateRpc[0].args.pin_hash, undefined);
+  assert.strictEqual(privateSaved.isPrivate, true);
+  assert.strictEqual(privateSaved.audioPath, undefined);
+  console.log("PASS private voice upload uses a private path and the server hashes the PIN");
+
+  const unlockWin = makeWindow();
+  unlockWin.window.LEAVING_CARD_SUPABASE = {
+    url: "https://example.supabase.co",
+    anonKey: "test-publishable-anon-key",
+  };
+  unlockWin.window.supabase = {
+    createClient() {
+      return {
+        rpc: async (fn, args) => {
+          assert.strictEqual(fn, "unlock_voice_message");
+          assert.strictEqual(args.message_id, "msg-9");
+          if (args.provided_pin === "0000") return { data: { ok: false, error: "Incorrect PIN" }, error: null };
+          if (args.provided_pin === "bad!") {
+            return { data: null, error: { message: 'invalid input syntax for type uuid: "nope"' } };
+          }
+          if (args.provided_pin === "gone") {
+            return { data: null, error: { message: "Message not found" } };
+          }
+          if (args.provided_pin === "9999") {
+            return { data: { ok: false, error: "Too many attempts. Wait a few minutes and try again." }, error: null };
+          }
+          return { data: { ok: true, audio_path: "private/msg.webm" }, error: null };
+        },
+      };
+    },
+  };
+  loadScript("js/storage.js", unlockWin);
+  const unlockStore = unlockWin.window.LeavingCard.storage.CardStore;
+  let wrongPin = false;
+  try {
+    await unlockStore.unlockVoice("msg-9", "0000");
+  } catch (err) {
+    wrongPin = err.message === "Incorrect PIN";
+  }
+  assert.ok(wrongPin, "wrong PIN is reported as Incorrect PIN");
+  let badId = false;
+  try {
+    await unlockStore.unlockVoice("msg-9", "bad!");
+  } catch (err) {
+    badId = err.message === "Incorrect PIN";
+  }
+  assert.ok(badId, "a database uuid error is shown as Incorrect PIN");
+  let missing = false;
+  try {
+    await unlockStore.unlockVoice("msg-9", "gone");
+  } catch (err) {
+    missing = err.message === "Incorrect PIN";
+  }
+  assert.ok(missing, "a missing message is shown as Incorrect PIN");
+  let lockedOut = false;
+  try {
+    await unlockStore.unlockVoice("msg-9", "9999");
+  } catch (err) {
+    lockedOut = /Too many attempts/.test(err.message);
+  }
+  assert.ok(lockedOut, "too many PIN attempts are surfaced");
+  const unlockedPath = await unlockStore.unlockVoice("msg-9", "2468");
+  assert.strictEqual(unlockedPath, "private/msg.webm");
+  console.log("PASS unlock_voice_message accepts the PIN and rejects a wrong one");
 
   let removeBlocked = false;
   try {
@@ -257,7 +413,11 @@ async function run() {
                 eq(col, id) {
                   assert.strictEqual(col, "id");
                   deleted.rows.push(id);
-                  return Promise.resolve({ data: null, error: null });
+                  return {
+                    select() {
+                      return Promise.resolve({ data: [{ id }], error: null });
+                    },
+                  };
                 },
               };
             },
