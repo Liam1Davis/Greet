@@ -203,9 +203,12 @@
         </div>
         <audio id="rec-audio" preload="auto" hidden></audio>
         <p class="field__error" id="voice-error" role="alert"></p>
-        <label class="check-row" for="voice-private">
+        <label class="privacy-choice" for="voice-private">
           <input type="checkbox" id="voice-private" name="private" />
-          <span>Make this message private (for Tracey only)</span>
+          <span class="privacy-choice__copy">
+            <strong>Make this message private (for Tracey only)</strong>
+            <span class="privacy-choice__hint">Leave this unticked and anyone can hear your message</span>
+          </span>
         </label>
         <div class="field" id="voice-pin-field" hidden>
           <label for="voice-pin">Set a PIN so you or Tracey can unlock it <span class="req" aria-hidden="true">*</span></label>

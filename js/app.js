@@ -1536,6 +1536,18 @@ voiceForm.addEventListener("submit", async (e) => {
     if (voicePin) voicePin.focus();
     return;
   }
+  if (!isPrivate) {
+    const addPublic = window.confirm(
+      "Anyone with Tracey’s card will be able to play this recording.\n\nOK = add it as a public message\nCancel = go back and make it private",
+    );
+    if (!addPublic) {
+      if (voicePrivate) {
+        voicePrivate.focus({ preventScroll: true });
+        voicePrivate.scrollIntoView({ block: "center", behavior: "smooth" });
+      }
+      return;
+    }
+  }
   voiceSubmit.disabled = true;
   try {
     const message = await CardStore.addVoice({

@@ -97,6 +97,9 @@ assert.strictEqual(belowVideo[0].length, 3, "three notes should fit below the ce
 console.log("PASS three notes fit below the centered video on page 2");
 
 const app = fs.readFileSync(path.join(root, "js/app.js"), "utf8");
+const css = fs.readFileSync(path.join(root, "css/styles.css"), "utf8");
+assert.match(css, /max-width: calc\(100% - 120px\)/);
+assert.match(css, /\.cover-ribbon \{[\s\S]*?right: 22px;/);
 assert.match(app, /Good Luck In Your New Job\./);
 assert.match(app, /We Are All Going To/);
 assert.match(app, /MISS YOU!!!/);
@@ -121,6 +124,9 @@ assert.match(fs.readFileSync(path.join(root, "js/storage.js"), "utf8"), /\["audi
 assert.match(fs.readFileSync(path.join(root, "index.html"), "utf8"), /Admin Mode Active/);
 assert.match(fs.readFileSync(path.join(root, "index.html"), "utf8"), /id="btn-admin"/);
 assert.match(fs.readFileSync(path.join(root, "index.html"), "utf8"), /Make this message private \(for Tracey only\)/);
+assert.match(fs.readFileSync(path.join(root, "index.html"), "utf8"), /privacy-choice/);
+assert.match(app, /add it as a public message/);
+assert.match(app, /go back and make it private/);
 assert.match(fs.readFileSync(path.join(root, "index.html"), "utf8"), /Set a PIN so you or Tracey can unlock it/);
 assert.match(fs.readFileSync(path.join(root, "index.html"), "utf8"), /Enter 4-digit PIN or Master Passcode to listen/);
 assert.match(app, /Private message for Tracey — from/);

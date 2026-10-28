@@ -514,7 +514,7 @@ textarea:focus-visible,
   color: var(--navy);
   font-size: clamp(18px, 4.4cqw, 34px);
   line-height: 1.25;
-  max-width: 86%;
+  max-width: calc(100% - 120px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -628,12 +628,13 @@ body.on-cover .nav-btn--next:not([disabled]) {
 .cover-ribbon {
   position: absolute;
   top: 0;
-  right: 11%;
-  width: 34px;
+  right: 22px;
+  width: 26px;
   height: 17%;
   background: linear-gradient(180deg, #3b5078, var(--navy));
   clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 80%, 0 100%);
   box-shadow: 0 6px 12px rgba(42, 55, 69, 0.25);
+  pointer-events: none;
 }
 .cover-ribbon::after {
   content: "";
@@ -935,6 +936,46 @@ button.voice-note--locked {
   height: 22px;
   margin-top: 1px;
   flex: 0 0 auto;
+}
+.privacy-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  margin: 4px 0 2px;
+  padding: 12px 14px;
+  min-height: 52px;
+  border: 2px solid rgba(44, 62, 90, 0.45);
+  border-radius: 12px;
+  background: rgba(201, 169, 97, 0.16);
+  cursor: pointer;
+}
+.privacy-choice:focus-within {
+  outline: 3px solid rgba(201, 169, 97, 0.65);
+  outline-offset: 2px;
+}
+.privacy-choice input {
+  width: 24px;
+  height: 24px;
+  margin-top: 2px;
+  flex: 0 0 auto;
+  accent-color: var(--navy);
+}
+.privacy-choice__copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.privacy-choice__copy strong {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--navy);
+  line-height: 1.3;
+}
+.privacy-choice__hint {
+  font-size: 14px;
+  line-height: 1.35;
+  color: var(--ink);
 }
 .note-delete {
   position: absolute;
@@ -1594,7 +1635,7 @@ button.voice-note--locked {
   }
   .cover-heading {
     font-size: clamp(16px, 5.4vw, 24px);
-    max-width: 88%;
+    max-width: calc(100% - 84px);
   }
   .cover-for {
     font-size: clamp(28px, 11vw, 46px);
@@ -1606,8 +1647,8 @@ button.voice-note--locked {
     inset: 10px;
   }
   .cover-ribbon {
-    width: 22px;
-    right: 8%;
+    width: 18px;
+    right: 14px;
   }
   .cover-flourish {
     width: 22%;
